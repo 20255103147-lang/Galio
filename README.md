@@ -1,6 +1,6 @@
-# Galio — 32-bit Kernel for LIDE OS
+# Galio — 32-bit Kernel 
 
-**Galio** is a comprehensive 32-bit kernel designed as the foundation for the LIDE operating system. It provides a full protected-mode environment with memory management, interrupt handling, device drivers, and basic process support, enabling the development of higher-level OS components.
+**Galio** is a comprehensive 32-bit kernel designed  for a system. It provides a full protected-mode environment with memory management, interrupt handling, device drivers, and basic process support, enabling the development of higher-level OS components.
 
 ---
 
