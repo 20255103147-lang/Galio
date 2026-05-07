@@ -7,8 +7,10 @@ CFLAGS = -m32 -ffreestanding -O2 -Wall -Wextra -Iinclude
 ASFLAGS = -f elf32
 LDFLAGS = -m elf_i386 -T boot/linker.ld
 
-SRCS = src/kernel.c src/kmain.c src/vga.c src/gdt.c src/idt.c src/irq.c
-OBJS = $(SRCS:.c=.o) src/asm.o boot/boot.o
+SRCS = src/kernel.c src/kmain.c src/vga.c src/gdt.c src/idt.c src/irq.c src/isr.c src/kprintf.c \
+       src/serial.c src/pmem.c src/paging.c src/heap.c src/pit.c src/keyboard.c src/process.c \
+       src/syscall.c src/elf.c src/vfs.c src/string.c
+OBJS = $(SRCS:.c=.o) src/asm.o src/isr_asm.o boot/boot.o
 
 .PHONY: all clean run
 
@@ -22,6 +24,9 @@ boot/boot.o: boot/boot.S
 
 src/asm.o: src/asm.s
 	$(AS) $(ASFLAGS) src/asm.s -o src/asm.o
+
+src/isr_asm.o: src/isr_asm.s
+	$(AS) $(ASFLAGS) src/isr_asm.s -o src/isr_asm.o
 
 %.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@

@@ -1,8 +1,11 @@
 /* kernel.c
- * Utility functions for the kernel: memset, memcpy, panic
+ * Utility functions for the kernel: memset, memcpy, panic, kernel_status
  */
 #include "common.h"
 #include "vga.h"
+#include "kprintf.h"
+#include "pit.h"
+#include "process.h"
 
 void *memset(void *s, int c, u32 n) {
     u8 *p = (u8*)s;
@@ -21,4 +24,11 @@ void panic(const char *msg) {
     vga_puts("KERNEL PANIC: ");
     vga_puts(msg);
     for (;;) __asm__ volatile("cli; hlt");
+}
+
+/* Show ongoing kernel status */
+void kernel_status(void) {
+    u32 ticks = pit_get_ticks();
+    u32 pid   = process_current() ? process_current()->pid : 0;
+    kprintf("[kernel] PID=%u, uptime=%u ticks\n", pid, ticks);
 }

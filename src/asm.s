@@ -1,8 +1,9 @@
 ; src/asm.S
-; Provides gdt_flush and idt_load wrappers and a simple isr stub (unused but handy)
+; Provides gdt_flush, idt_load, and paging operations
 BITS 32
 GLOBAL gdt_flush
 GLOBAL idt_load
+GLOBAL paging_enable_asm
 
 ; gdt_flush: arg = pointer to gdt_ptr (limit:16, base:32)
 gdt_flush:
@@ -25,3 +26,13 @@ idt_load:
     mov eax, [esp + 4]
     lidt [eax]
     ret
+
+; paging_enable_asm: arg = page directory address
+paging_enable_asm:
+    mov eax, [esp + 4]
+    mov cr3, eax            ; Load page directory
+    mov eax, cr0
+    or eax, 0x80000000     ; Set PG bit
+    mov cr0, eax            ; Enable paging
+    ret
+
