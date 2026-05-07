@@ -9,8 +9,15 @@ LDFLAGS = -m elf_i386 -T boot/linker.ld
 
 SRCS = src/kernel.c src/kmain.c src/vga.c src/gdt.c src/idt.c src/irq.c src/isr.c src/kprintf.c \
        src/serial.c src/pmem.c src/paging.c src/heap.c src/pit.c src/keyboard.c src/process.c \
-       src/syscall.c src/elf.c src/vfs.c src/string.c
-OBJS = $(SRCS:.c=.o) src/asm.o src/isr_asm.o boot/boot.o
+       src/syscall.c src/elf.c src/vfs.c src/string.c src/mem_test.c
+OBJS = $(SRCS:.c=.o) src/asm.o src/isr_asm.o boot/boot.o src/embedded_test.o
+TEST_ELF = test_elf.bin
+
+src/embedded_test.o: $(TEST_ELF)
+	objcopy -I binary -O elf32-i386 -B i386 $< $@
+
+test_elf.bin: test/test_elf.c
+	gcc -m32 -ffreestanding -nostdlib -Wl,--entry=_start -Wl,-Ttext=0x10000 $< -o $@
 
 .PHONY: all clean run
 
