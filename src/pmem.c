@@ -30,6 +30,7 @@ void pmem_init(u32 mmap_addr, u32 mmap_length) {
     u32 kernel_end = 0x400000;  /* Approximate kernel end */
     
     kprintf("Physical memory manager initializing...\n");
+    kprintf("pmem_init: Bitmap size = %u bytes (supports %u MB)\n", BITMAP_SIZE, BITMAP_SIZE * 8 * FRAME_SIZE / (1024*1024));
 
     /* Mark all memory as used initially */
     for (u32 frame = 0; frame < BITMAP_SIZE * 8; frame++) {
@@ -38,21 +39,25 @@ void pmem_init(u32 mmap_addr, u32 mmap_length) {
 
     /* If no valid mmap, assume 128MB is available */
     if (mmap_addr == 0 || mmap_length == 0) {
-        kprintf("No Multiboot memory map, assuming 128 MB available\n");
+        kprintf("pmem_init: No Multiboot memory map, assuming 128 MB available\n");
         
         /* Assume memory from 0x100000 to 0x8000000 is available (126 MB) */
         u32 start_frame = 0x100000 / FRAME_SIZE;
         u32 end_frame = 0x8000000 / FRAME_SIZE;
+        
+        kprintf("pmem_init: Marking frames %u-%u as available (0x100000-0x8000000)\n", start_frame, end_frame);
         
         for (u32 frame = start_frame; frame < end_frame; frame++) {
             unset_frame(frame);
             total_frames++;
         }
     } else {
-        kprintf("Multiboot mmap: addr=%x, len=%d\n", mmap_addr, mmap_length);
+        kprintf("pmem_init: Found Multiboot mmap: addr=%x, len=%u\n", mmap_addr, mmap_length);
         
         /* Parse Multiboot memory map */
         mmap_entry_t *entry = (mmap_entry_t *)mmap_addr;
+        u32 entry_count = 0;
+        
         while ((u32)entry < mmap_addr + mmap_length) {
             u32 addr = entry->addr_low;
             u32 len = entry->len_low;
@@ -62,22 +67,32 @@ void pmem_init(u32 mmap_addr, u32 mmap_length) {
                 u32 start_frame = addr / FRAME_SIZE;
                 u32 end_frame = (addr + len) / FRAME_SIZE;
 
+                kprintf("pmem_init: Available region %u: %x-%x (%u KB)\n",
+                        entry_count, addr, addr + len, len / 1024);
+
                 for (u32 frame = start_frame; frame < end_frame; frame++) {
                     unset_frame(frame);
                     total_frames++;
                 }
-
-                kprintf("  Available: %x - %x (%u MB)\n",
-                        addr, addr + len, len / (1024*1024));
+            } else {
+                kprintf("pmem_init: Reserved region %u: %x-%x (type=%u)\n",
+                        entry_count, addr, addr + len, entry->type);
             }
-
+            
             entry = (mmap_entry_t *)next;
+            entry_count++;
         }
+        
+        kprintf("pmem_init: Parsed %u memory map entries\n", entry_count);
     }
 
     /* Mark kernel space as used */
     u32 kernel_start_frame = 0x100000 / FRAME_SIZE;
     u32 kernel_end_frame = kernel_end / FRAME_SIZE;
+    
+    kprintf("pmem_init: Marking kernel frames %u-%u (0x100000-0x%x) as used\n", 
+            kernel_start_frame, kernel_end_frame, kernel_end);
+    
     for (u32 frame = kernel_start_frame; frame < kernel_end_frame; frame++) {
         if (!get_frame(frame)) {
             set_frame(frame);
@@ -86,10 +101,10 @@ void pmem_init(u32 mmap_addr, u32 mmap_length) {
         }
     }
 
-    kprintf("Physical memory: total=%u MB, kernel=%u KB, free=%u MB\n",
-            total_frames * FRAME_SIZE / (1024 * 1024),
-            kernel_frames * FRAME_SIZE / 1024,
-            (total_frames - used_frames) * FRAME_SIZE / (1024 * 1024));
+    kprintf("pmem_init: Status: total=%u frames (%u MB), kernel=%u frames (%u KB), free=%u frames (%u MB)\n",
+            total_frames, total_frames * FRAME_SIZE / (1024 * 1024),
+            kernel_frames, kernel_frames * FRAME_SIZE / 1024,
+            (total_frames - used_frames), (total_frames - used_frames) * FRAME_SIZE / (1024 * 1024));
 
     /* Mark frame 0 as used to avoid NULL pointer allocations */
     set_frame(0);
@@ -97,6 +112,11 @@ void pmem_init(u32 mmap_addr, u32 mmap_length) {
 }
 
 u32 pmem_alloc(size_t num_frames) {
+    if (num_frames == 0) {
+        kprintf("pmem_alloc: Cannot allocate 0 frames\n");
+        return 0;
+    }
+    
     for (u32 frame = 0; frame < BITMAP_SIZE * 8; frame++) {
         if (!get_frame(frame)) {
             /* Check if we have enough contiguous frames */
@@ -113,12 +133,15 @@ u32 pmem_alloc(size_t num_frames) {
                     set_frame(frame + i);
                 }
                 used_frames += num_frames;
-                return frame * FRAME_SIZE;
+                u32 addr = frame * FRAME_SIZE;
+                kprintf("pmem_alloc: Allocated %u frame(s) at addr=%x (frame %u)\n", num_frames, addr, frame);
+                return addr;
             }
         }
     }
     
-    kprintf("pmem_alloc: Out of physical memory\n");
+    kprintf("pmem_alloc: Out of physical memory (requested %u frames, have %u free)\n", 
+            num_frames, total_frames - used_frames);
     return 0;
 }
 
