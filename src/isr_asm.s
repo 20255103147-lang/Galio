@@ -1,40 +1,37 @@
-; isr_asm.s - ISR and IRQ stubs with error code handling (fixed)
-; Builds register frame and preserves segment registers correctly.
+; isr_asm.s - ISR and IRQ stubs with proper argument passing
 
 BITS 32
 
-; External handlers
 extern isr_handler
 extern irq_handler
-extern syscall_handler
 
-; Macro to define an ISR that pushes a dummy error code
+; Macro for ISR without error code
 %macro ISR_NOERRCODE 1
 global isr%1
 isr%1:
-    push 0              ; dummy error code
-    push %1             ; interrupt number
+    push 0
+    push %1
     jmp isr_common_stub
 %endmacro
 
-; Macro to define an ISR that has an error code
+; Macro for ISR with error code
 %macro ISR_ERRCODE 1
 global isr%1
 isr%1:
-    push %1             ; interrupt number (error code already pushed by CPU)
+    push %1
     jmp isr_common_stub
 %endmacro
 
-; Macro to define an IRQ handler
+; Macro for IRQ stub
 %macro IRQ_STUB 2
 global irq%1
 irq%1:
-    push 0              ; dummy error code
-    push %2             ; interrupt number (32 + irq_num)
+    push 0
+    push %2
     jmp irq_common_stub
 %endmacro
 
-; ISRs 0-31: CPU Exceptions
+; ISRs 0-31
 ISR_NOERRCODE 0
 ISR_NOERRCODE 1
 ISR_NOERRCODE 2
@@ -43,16 +40,16 @@ ISR_NOERRCODE 4
 ISR_NOERRCODE 5
 ISR_NOERRCODE 6
 ISR_NOERRCODE 7
-ISR_ERRCODE 8        ; Double fault has error code
+ISR_ERRCODE 8
 ISR_NOERRCODE 9
-ISR_ERRCODE 10       ; Invalid TSS has error code
-ISR_ERRCODE 11       ; Segment not present has error code
-ISR_ERRCODE 12       ; Stack-segment fault has error code
-ISR_ERRCODE 13       ; General protection fault has error code
-ISR_ERRCODE 14       ; Page fault has error code
+ISR_ERRCODE 10
+ISR_ERRCODE 11
+ISR_ERRCODE 12
+ISR_ERRCODE 13
+ISR_ERRCODE 14
 ISR_NOERRCODE 15
 ISR_NOERRCODE 16
-ISR_ERRCODE 17       ; Alignment check has error code
+ISR_ERRCODE 17
 ISR_NOERRCODE 18
 ISR_NOERRCODE 19
 ISR_NOERRCODE 20
@@ -65,10 +62,10 @@ ISR_NOERRCODE 26
 ISR_NOERRCODE 27
 ISR_NOERRCODE 28
 ISR_NOERRCODE 29
-ISR_ERRCODE 30       ; Security exception has error code
+ISR_ERRCODE 30
 ISR_NOERRCODE 31
 
-; IRQs 0-15: Hardware interrupts
+; IRQs 0-15
 IRQ_STUB 0, 32
 IRQ_STUB 1, 33
 IRQ_STUB 2, 34
@@ -89,52 +86,61 @@ IRQ_STUB 15, 47
 ; Syscall handler (INT 0x80)
 global isr_syscall
 isr_syscall:
-    push 0              ; dummy error code
-    push 0x80           ; syscall number
+    push 0
+    push 0x80
     jmp isr_common_stub
 
-; Common ISR stub - builds register structure and calls C handler
+; Common ISR stub – passes registers_t pointer to isr_handler
 isr_common_stub:
-    pusha               ; push all general purpose registers
-    push ds             ; save current data segment selector
+    pusha
+    push ds
+    push es
+    push fs
+    push gs
 
-    mov ax, 0x10        ; kernel data segment selector
+    mov ax, 0x10        ; kernel data segment
     mov ds, ax
     mov es, ax
     mov fs, ax
     mov gs, ax
 
+    ; Pass pointer to register frame as argument
+    mov eax, esp
+    push eax
     call isr_handler
+    add esp, 4
 
-    pop ds              ; restore original data segment selector
-    mov ax, ds
-    mov es, ax
-    mov fs, ax
-    mov gs, ax
-
+    pop gs
+    pop fs
+    pop es
+    pop ds
     popa
     add esp, 8          ; remove error code and interrupt number
     iret
 
-; Common IRQ stub - builds register structure and calls C handler
+; Common IRQ stub – passes registers_t pointer to irq_handler
 irq_common_stub:
-    pusha               ; push all general purpose registers
-    push ds             ; save current data segment selector
+    pusha
+    push ds
+    push es
+    push fs
+    push gs
 
-    mov ax, 0x10        ; kernel data segment selector
+    mov ax, 0x10
     mov ds, ax
     mov es, ax
     mov fs, ax
     mov gs, ax
 
+    mov eax, esp
+    push eax
     call irq_handler
+    add esp, 4
 
-    pop ds              ; restore original data segment selector
-    mov ax, ds
-    mov es, ax
-    mov fs, ax
-    mov gs, ax
-
+    pop gs
+    pop fs
+    pop es
+    pop ds
     popa
-    add esp, 8          ; remove error code and interrupt number
+    add esp, 8
     iret

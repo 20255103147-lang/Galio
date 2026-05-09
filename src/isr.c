@@ -5,7 +5,6 @@
 #include "kprintf.h"
 #include <stddef.h>
 
-
 /* Handlers for each interrupt - initialized to NULL */
 static interrupt_handler_t handlers[256] = {0};
 
@@ -15,38 +14,13 @@ void interrupt_install_handler(u32 n, interrupt_handler_t handler) {
 
 /* Exception names for debugging */
 static const char *exception_names[] = {
-    "Divide by zero",
-    "Debug",
-    "Non-maskable interrupt",
-    "Breakpoint",
-    "Overflow",
-    "Bound range exceeded",
-    "Invalid opcode",
-    "Device not available",
-    "Double fault",
-    "Coprocessor segment overrun",
-    "Invalid TSS",
-    "Segment not present",
-    "Stack-segment fault",
-    "General protection fault",
-    "Page fault",
-    "Reserved",
-    "x87 floating-point",
-    "Alignment check",
-    "Machine check",
-    "SIMD floating-point",
-    "Virtualization",
-    "Reserved",
-    "Reserved",
-    "Reserved",
-    "Reserved",
-    "Reserved",
-    "Reserved",
-    "Reserved",
-    "Reserved",
-    "Reserved",
-    "Security exception",
-    "Reserved"
+    "Divide by zero", "Debug", "Non-maskable interrupt", "Breakpoint",
+    "Overflow", "Bound range exceeded", "Invalid opcode", "Device not available",
+    "Double fault", "Coprocessor segment overrun", "Invalid TSS", "Segment not present",
+    "Stack-segment fault", "General protection fault", "Page fault", "Reserved",
+    "x87 floating-point", "Alignment check", "Machine check", "SIMD floating-point",
+    "Virtualization", "Reserved", "Reserved", "Reserved", "Reserved", "Reserved",
+    "Reserved", "Reserved", "Reserved", "Reserved", "Security exception", "Reserved"
 };
 
 static void print_registers(registers_t *regs) {
@@ -66,37 +40,26 @@ static void print_registers(registers_t *regs) {
 void isr_handler(registers_t *regs) {
     u32 int_no = regs->interrupt_number;
     
-    /* Handle syscall separately */
     if (int_no == 0x80) {
-        if (handlers[int_no] != NULL) {
+        if (handlers[int_no] != NULL)
             handlers[int_no](regs);
-        }
         return;
     }
     
     if (int_no < 32) {
-        /* CPU Exception */
         vga_puts("\n=== CPU EXCEPTION ===\n");
-        if (int_no < 32) {
-            kprintf("Exception: %s (INT %d)\n", exception_names[int_no], int_no);
-        } else {
-            kprintf("Exception: INT %d\n", int_no);
-        }
+        kprintf("Exception: %s (INT %d)\n", exception_names[int_no], int_no);
         print_registers(regs);
-        
-        /* Special handling for page faults */
         if (int_no == 14) {
             u32 cr2;
             __asm__ volatile("mov %%cr2, %0" : "=r"(cr2));
             kprintf("Faulting address: %08X\n", cr2);
         }
-        
         vga_puts("=== HALTED ===\n");
         disable_interrupts();
         halt();
     }
     
-    /* Allow custom handlers */
     if (handlers[int_no] != NULL) {
         handlers[int_no](regs);
     }
@@ -104,17 +67,16 @@ void isr_handler(registers_t *regs) {
 
 /* Main IRQ handler - called from assembly */
 void irq_handler(registers_t *regs) {
-    /* Debug: show which interrupt number arrived */
-    kprintf("[irq] dispatch: int=%u\n", regs->interrupt_number);
-
-    /* Send EOI to PIC */
-    if (regs->interrupt_number >= 40) {
-        outb(0xA0, 0x20); // Slave PIC EOI
+    /* Only print every 100th IRQ to avoid flooding */
+    static u32 irq_counter = 0;
+    if (irq_counter++ % 100 == 0) {
+        kprintf("[IRQ] INT %u (counter=%u)\n", regs->interrupt_number, irq_counter);
     }
-    outb(0x20, 0x20);     // Master PIC EOI
 
-    /* Dispatch to registered handler if exists */
-    if (handlers[regs->interrupt_number] != NULL) {
+    if (regs->interrupt_number >= 40)
+        outb(0xA0, 0x20);
+    outb(0x20, 0x20);
+
+    if (handlers[regs->interrupt_number] != NULL)
         handlers[regs->interrupt_number](regs);
-    }
 }
