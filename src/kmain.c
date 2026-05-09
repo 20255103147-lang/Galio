@@ -143,28 +143,26 @@ void kmain(void *multiboot_ptr) {
         kprintf("FAILED to read /boot/config.txt\n");
     }
     kprintf("\n");
+    kprintf("Filesystem tests completed.\n");
+    kprintf("─────────────────────────────────────────────────────────────\n");
 
-    kprintf("╔══════════════════════════════════════════════════════════════╗\n");
-    kprintf("║              FILESYSTEM TESTS COMPLETED                       ║\n");
-    kprintf("╚══════════════════════════════════════════════════════════════╝\n");
-    kprintf("\n");
-
-    /* ELF test disabled */
-    // kprintf("Loading ELF loader smoke test...\n");
-    // u32 elf_entry = elf_load(&_binary_test_elf_bin_start);
-    // if (elf_entry) {
-    //     kprintf("ELF loaded successfully, entry point: %08X\n", elf_entry);
-    //     kprintf("Executing test ELF...\n");
-    //     ((void (*)(void))elf_entry)();
-    // } else {
-    //     kprintf("ELF_LOADER_TEST: FAILED\n");
-    // }
+    /* ELF test disabled 
+     kprintf("Loading ELF loader smoke test...\n");
+     u32 elf_entry = elf_load(&_binary_test_elf_bin_start);
+     if (elf_entry) {
+         kprintf("ELF loaded successfully, entry point: %08X\n", elf_entry);
+         kprintf("Executing test ELF...\n");
+         ((void (*)(void))elf_entry)();
+     } else {
+         kprintf("ELF_LOADER_TEST: FAILED\n");
+     }
+         */
 
     kprintf("\n");
     kprintf("╔════════════════════════════════════════════════════════════════╗\n");
-    kprintf("║                    Galio Kernel                                ║\n");
-    kprintf("║                                                                 ║\n");
-    kprintf("║  Press 'c' to enter interactive shell...                       ║\n");
+    kprintf("║                    Galio                                       ║\n");
+    kprintf("║                                                                ║\n");
+    kprintf("║       Press 'c' to enter interactive shell...                  ║\n");
     kprintf("╚════════════════════════════════════════════════════════════════╝\n");
     kprintf("\n");
 
