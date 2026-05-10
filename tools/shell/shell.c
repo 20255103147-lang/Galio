@@ -10,6 +10,8 @@
 #define SHELL_BUFFER_SIZE 256
 #define HISTORY_SIZE 10
 #define HISTORY_BUFFER_SIZE 256
+#define DIR_HISTORY_SIZE 32
+#define DIR_PATH_SIZE 256
 
 /* ASCII lookup table for scancodes */
 static const u8 ascii_table[] = {
@@ -30,8 +32,14 @@ typedef struct {
     u32 index;
 } shell_history_t;
 
+typedef struct {
+    char stack[DIR_HISTORY_SIZE][DIR_PATH_SIZE];
+    u32 sp;
+} dir_history_t;
+
 static shell_input_t input;
 static shell_history_t history = {0};
+static dir_history_t dir_history = {0};
 static u8 extended_key = 0;
 static char current_dir[256] = "/";
 
@@ -77,6 +85,9 @@ static void shell_execute_command(void) {
         kprintf("  echo     - Echo text (usage: echo <text>)\n");
         kprintf("  uname    - Show system name\n");
         kprintf("  pwd      - Print current directory\n");
+        kprintf("  goto     - Change directory (usage: goto <path>)\n");
+        kprintf("  back     - Go back to previous directory\n");
+        kprintf("Use UP/DOWN arrows to navigate history\n");
     } else if (strncmp(input.buffer, "ls", 2) == 0) {
         vfs_listdir(current_dir);
     } else if (strncmp(input.buffer, "mkdir ", 6) == 0) {
@@ -86,17 +97,16 @@ static void shell_execute_command(void) {
         if (dirname[0] == '/') {
             strncpy(fullpath, dirname, 255);
         } else {
-            if (strncmp(current_dir, "/", 1) == 0) {
-                strncpy(fullpath, current_dir, 255);
-                strncat(fullpath, "/", 255);
-                strncat(fullpath, dirname, 255);
-            } else {
-                strncpy(fullpath, current_dir, 255);
-                strncat(fullpath, "/", 255);
-                strncat(fullpath, dirname, 255);
+            strncpy(fullpath, current_dir, 255);
+            int len = strlen(fullpath);
+            if (len > 0 && fullpath[len-1] != '/') {
+                fullpath[len] = '/';
+                fullpath[len+1] = '\0';
             }
+            strncat(fullpath, dirname, 255 - strlen(fullpath) - 1);
         }
         fullpath[255] = 0;
+        //kprintf("[DEBUG] mkdir: current_dir=%s, dirname=%s, fullpath=%s\n", current_dir, dirname, fullpath);
         vfs_mkdir(fullpath);
     } else if (strncmp(input.buffer, "rmdir ", 6) == 0) {
         const char *dirname = input.buffer + 6;
@@ -105,29 +115,65 @@ static void shell_execute_command(void) {
         if (dirname[0] == '/') {
             strncpy(fullpath, dirname, 255);
         } else {
-            if (strncmp(current_dir, "/", 1) == 0) {
-                strncpy(fullpath, current_dir, 255);
-                strncat(fullpath, "/", 255);
-                strncat(fullpath, dirname, 255);
-            } else {
-                strncpy(fullpath, current_dir, 255);
-                strncat(fullpath, "/", 255);
-                strncat(fullpath, dirname, 255);
+            strncpy(fullpath, current_dir, 255);
+            int len = strlen(fullpath);
+            if (len > 0 && fullpath[len-1] != '/') {
+                fullpath[len] = '/';
+                fullpath[len+1] = '\0';
             }
+            strncat(fullpath, dirname, 255 - strlen(fullpath) - 1);
         }
         fullpath[255] = 0;
         vfs_rmdir(fullpath);
     } else if (strncmp(input.buffer, "pwd", 3) == 0) {
         kprintf("%s\n", current_dir);
+    } else if (strncmp(input.buffer, "goto ", 5) == 0) {
+        const char *dirname = input.buffer + 5;
+        char fullpath[256];
+
+        if (dirname[0] == '/') {
+            strncpy(fullpath, dirname, 255);
+        } else {
+            strncpy(fullpath, current_dir, 255);
+            int len = strlen(fullpath);
+            if (len > 0 && fullpath[len-1] != '/') {
+                fullpath[len] = '/';
+                fullpath[len+1] = '\0';
+            }
+            strncat(fullpath, dirname, 255 - strlen(fullpath) - 1);
+        }
+        fullpath[255] = 0;
+        //kprintf("[DEBUG] goto: fullpath=%s, is_dir=%u\n", fullpath, vfs_is_dir(fullpath));
+
+        if (vfs_is_dir(fullpath)) {
+            if (dir_history.sp < DIR_HISTORY_SIZE) {
+                strncpy(dir_history.stack[dir_history.sp], current_dir, DIR_PATH_SIZE - 1);
+                dir_history.stack[dir_history.sp][DIR_PATH_SIZE - 1] = 0;
+                dir_history.sp++;
+            }
+            strncpy(current_dir, fullpath, 255);
+            current_dir[255] = 0;
+            //kprintf("[DEBUG] goto: current_dir now=%s\n", current_dir);
+        } else {
+            kprintf("Directory not found: %s\n", fullpath);
+        }
+    } else if (strncmp(input.buffer, "back", 4) == 0) {
+        if (dir_history.sp > 0) {
+            dir_history.sp--;
+            strncpy(current_dir, dir_history.stack[dir_history.sp], 255);
+            current_dir[255] = 0;
+        } else {
+            kprintf("No previous directory\n");
+        }
     } else if (strncmp(input.buffer, "echo ", 5) == 0) {
         kprintf("%s\n", input.buffer + 5);
     } else if (strncmp(input.buffer, "uname", 5) == 0) {
-        kprintf("Galio Kernel v1.0\n");
+        kprintf("Galio v1.0\n");
     } else if (input.len > 0) {
         kprintf("Unknown command: %s\nType 'help' for available commands\n", input.buffer);
     }
 
-    kprintf("> ");
+    kprintf("[@%s] ", current_dir);
     input.len = 0;
 }
 
@@ -210,9 +256,9 @@ void shell_run(void) {
     input.len = 0;
 
     vga_clear();
-    kprintf("Galio Kernel Shell - Type 'help' for commands\n");
-    kprintf("Use UP/DOWN arrows to navigate history\n");
-    kprintf("> ");
+    kprintf("Welcome to GSh \n");
+    //kprintf("Use UP/DOWN arrows to navigate history\n");
+    kprintf("[@~G ->  %s] ", current_dir);
 
     for (;;) {
         shell_poll_keyboard();

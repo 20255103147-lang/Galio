@@ -178,10 +178,10 @@ void vfs_listdir(const char *path) {
         char *parent = get_parent_dir(e->path);
         if (__builtin_strcmp(parent, norm_path) == 0) {
             if (e->is_dir) {
-                kprintf("    [DIR]  %-40s\n", vfs_basename(e->path));
+                kprintf("    [DIR]  %s/\n", vfs_basename(e->path));
                 dir_count++;
             } else {
-                kprintf("    [FILE] %-40s %8u bytes\n", vfs_basename(e->path), e->size);
+                kprintf("    [FILE] %s (%u bytes)\n", vfs_basename(e->path), e->size);
                 file_count++;
                 total_dir_size += e->size;
             }
@@ -413,6 +413,7 @@ u32 vfs_mkdir(const char *path) {
     }
 
     char *norm_path = path_normalize(path);
+    //kprintf("[VFS_DEBUG] vfs_mkdir: input path=%s, normalized=%s\n", path, norm_path);
 
     if (vfs_find(norm_path)) {
         kprintf("[VFS] ERROR: Directory already exists: %s\n", norm_path);
@@ -425,6 +426,7 @@ u32 vfs_mkdir(const char *path) {
     }
 
     char *parent = get_parent_dir(norm_path);
+    //kprintf("[VFS_DEBUG] vfs_mkdir: parent=%s\n", parent);
     if (__builtin_strcmp(parent, "/") != 0 && !vfs_find(parent)) {
         kprintf("[VFS] ERROR: Parent directory does not exist: %s\n", parent);
         return 0;
@@ -439,6 +441,7 @@ u32 vfs_mkdir(const char *path) {
         i++;
     }
     new_entry->path[i] = 0;
+   // kprintf("[VFS_DEBUG] vfs_mkdir: entry path set to=%s\n", new_entry->path);
 
     new_entry->size = 0;
     new_entry->offset = 0;
