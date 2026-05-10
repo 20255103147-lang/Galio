@@ -96,17 +96,17 @@ static void shell_execute_command(void) {
 
         if (dirname[0] == '/') {
             strncpy(fullpath, dirname, 255);
+            fullpath[255] = 0;
         } else {
             strncpy(fullpath, current_dir, 255);
+            fullpath[255] = 0;
             int len = strlen(fullpath);
             if (len > 0 && fullpath[len-1] != '/') {
-                fullpath[len] = '/';
-                fullpath[len+1] = '\0';
+                strncat(fullpath, "/", 255 - len - 1);
             }
             strncat(fullpath, dirname, 255 - strlen(fullpath) - 1);
         }
-        fullpath[255] = 0;
-        //kprintf("[DEBUG] mkdir: current_dir=%s, dirname=%s, fullpath=%s\n", current_dir, dirname, fullpath);
+        kprintf("[DEBUG] mkdir: current_dir='%s', dirname='%s', fullpath='%s'\n", current_dir, dirname, fullpath);
         vfs_mkdir(fullpath);
     } else if (strncmp(input.buffer, "rmdir ", 6) == 0) {
         const char *dirname = input.buffer + 6;
@@ -114,16 +114,16 @@ static void shell_execute_command(void) {
 
         if (dirname[0] == '/') {
             strncpy(fullpath, dirname, 255);
+            fullpath[255] = 0;
         } else {
             strncpy(fullpath, current_dir, 255);
+            fullpath[255] = 0;
             int len = strlen(fullpath);
             if (len > 0 && fullpath[len-1] != '/') {
-                fullpath[len] = '/';
-                fullpath[len+1] = '\0';
+                strncat(fullpath, "/", 255 - len - 1);
             }
             strncat(fullpath, dirname, 255 - strlen(fullpath) - 1);
         }
-        fullpath[255] = 0;
         vfs_rmdir(fullpath);
     } else if (strncmp(input.buffer, "pwd", 3) == 0) {
         kprintf("%s\n", current_dir);
@@ -133,17 +133,16 @@ static void shell_execute_command(void) {
 
         if (dirname[0] == '/') {
             strncpy(fullpath, dirname, 255);
+            fullpath[255] = 0;
         } else {
             strncpy(fullpath, current_dir, 255);
+            fullpath[255] = 0;
             int len = strlen(fullpath);
             if (len > 0 && fullpath[len-1] != '/') {
-                fullpath[len] = '/';
-                fullpath[len+1] = '\0';
+                strncat(fullpath, "/", 255 - len - 1);
             }
             strncat(fullpath, dirname, 255 - strlen(fullpath) - 1);
         }
-        fullpath[255] = 0;
-        //kprintf("[DEBUG] goto: fullpath=%s, is_dir=%u\n", fullpath, vfs_is_dir(fullpath));
 
         if (vfs_is_dir(fullpath)) {
             if (dir_history.sp < DIR_HISTORY_SIZE) {
@@ -153,7 +152,7 @@ static void shell_execute_command(void) {
             }
             strncpy(current_dir, fullpath, 255);
             current_dir[255] = 0;
-            //kprintf("[DEBUG] goto: current_dir now=%s\n", current_dir);
+            kprintf("[DEBUG] goto: current_dir now='%s'\n", current_dir);
         } else {
             kprintf("Directory not found: %s\n", fullpath);
         }

@@ -17,3 +17,14 @@ grub-mkrescue -o galio.iso iso
 qemu-system-i386 -cdrom galio.iso -m 128M -serial file:serial.log -monitor none -no-reboot
 # inspect output
 sed -n '1,200p' serial.log
+
+
+===================+
+
+✅ Cursor movement with arrow keys
+✅ Text input and character echo
+✅ Backspace to delete
+✅ Interactive command shell
+✅ Full keyboard support in QEMU
+
+The shell is now fully functional and interactive, giving you a real kernel-like experience with keyboard input handling just like real kernel boots!

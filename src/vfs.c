@@ -413,10 +413,18 @@ u32 vfs_mkdir(const char *path) {
     }
 
     char *norm_path = path_normalize(path);
-    //kprintf("[VFS_DEBUG] vfs_mkdir: input path=%s, normalized=%s\n", path, norm_path);
+    char norm_path_copy[VFS_MAX_PATH];
+    int i = 0;
+    while (norm_path[i] && i < VFS_MAX_PATH - 1) {
+        norm_path_copy[i] = norm_path[i];
+        i++;
+    }
+    norm_path_copy[i] = 0;
 
-    if (vfs_find(norm_path)) {
-        kprintf("[VFS] ERROR: Directory already exists: %s\n", norm_path);
+    kprintf("[VFS_DEBUG] vfs_mkdir: input path=%s, normalized=%s\n", path, norm_path_copy);
+
+    if (vfs_find(norm_path_copy)) {
+        kprintf("[VFS] ERROR: Directory already exists: %s\n", norm_path_copy);
         return 0;
     }
 
@@ -425,23 +433,31 @@ u32 vfs_mkdir(const char *path) {
         return 0;
     }
 
-    char *parent = get_parent_dir(norm_path);
-    //kprintf("[VFS_DEBUG] vfs_mkdir: parent=%s\n", parent);
-    if (__builtin_strcmp(parent, "/") != 0 && !vfs_find(parent)) {
-        kprintf("[VFS] ERROR: Parent directory does not exist: %s\n", parent);
+    char *parent = get_parent_dir(norm_path_copy);
+    char parent_copy[VFS_MAX_PATH];
+    i = 0;
+    while (parent[i] && i < VFS_MAX_PATH - 1) {
+        parent_copy[i] = parent[i];
+        i++;
+    }
+    parent_copy[i] = 0;
+
+    kprintf("[VFS_DEBUG] vfs_mkdir: parent=%s\n", parent_copy);
+    if (__builtin_strcmp(parent_copy, "/") != 0 && !vfs_find(parent_copy)) {
+        kprintf("[VFS] ERROR: Parent directory does not exist: %s\n", parent_copy);
         return 0;
     }
 
     u32 idx = vfs_root->entry_count;
     vfs_entry_t *new_entry = &vfs_root->entries[idx];
 
-    int i = 0;
-    while (norm_path[i] && i < VFS_MAX_PATH - 1) {
-        new_entry->path[i] = norm_path[i];
+    i = 0;
+    while (norm_path_copy[i] && i < VFS_MAX_PATH - 1) {
+        new_entry->path[i] = norm_path_copy[i];
         i++;
     }
     new_entry->path[i] = 0;
-   // kprintf("[VFS_DEBUG] vfs_mkdir: entry path set to=%s\n", new_entry->path);
+    kprintf("[VFS_DEBUG] vfs_mkdir: entry path set to=%s\n", new_entry->path);
 
     new_entry->size = 0;
     new_entry->offset = 0;
@@ -450,7 +466,7 @@ u32 vfs_mkdir(const char *path) {
 
     vfs_root->entry_count++;
 
-    kprintf("[VFS] Created directory: %s\n", norm_path);
+    kprintf("[VFS] Created directory: %s\n", norm_path_copy);
     return 1;
 }
 
@@ -461,15 +477,23 @@ u32 vfs_rmdir(const char *path) {
     }
 
     char *norm_path = path_normalize(path);
-    vfs_entry_t *entry = vfs_find(norm_path);
+    char norm_path_copy[VFS_MAX_PATH];
+    int i = 0;
+    while (norm_path[i] && i < VFS_MAX_PATH - 1) {
+        norm_path_copy[i] = norm_path[i];
+        i++;
+    }
+    norm_path_copy[i] = 0;
+
+    vfs_entry_t *entry = vfs_find(norm_path_copy);
 
     if (!entry) {
-        kprintf("[VFS] ERROR: Directory not found: %s\n", norm_path);
+        kprintf("[VFS] ERROR: Directory not found: %s\n", norm_path_copy);
         return 0;
     }
 
     if (!entry->is_dir) {
-        kprintf("[VFS] ERROR: Not a directory: %s\n", norm_path);
+        kprintf("[VFS] ERROR: Not a directory: %s\n", norm_path_copy);
         return 0;
     }
 
@@ -478,14 +502,14 @@ u32 vfs_rmdir(const char *path) {
         if (e == entry) continue;
 
         char *parent = get_parent_dir(e->path);
-        if (__builtin_strcmp(parent, norm_path) == 0) {
-            kprintf("[VFS] ERROR: Directory not empty: %s\n", norm_path);
+        if (__builtin_strcmp(parent, norm_path_copy) == 0) {
+            kprintf("[VFS] ERROR: Directory not empty: %s\n", norm_path_copy);
             return 0;
         }
     }
 
     entry->size = 0;
     entry->is_dir = 0;
-    kprintf("[VFS] Removed directory: %s\n", norm_path);
+    kprintf("[VFS] Removed directory: %s\n", norm_path_copy);
     return 1;
 }
