@@ -13,6 +13,7 @@
 #define HISTORY_BUFFER_SIZE 256
 #define DIR_HISTORY_SIZE 32
 #define DIR_PATH_SIZE 256
+#define ROOT_DIR "/"
 #define HOME_DIR "/home"
 
 /* ASCII lookup table for scancodes */
@@ -137,9 +138,8 @@ static void shell_execute_command(void) {
         kprintf(" |__________________________________________________________________|\n");
         kprintf(" |  back     - Go back to previous directory                        |\n");
         kprintf(" |__________________________________________________________________|\n");
-        kprintf(" |  rex      - Privileged command (sudo-like)                       |\n");
-        kprintf(" |            Usage: rex goto <path> (go to root or any dir)        |\n");
-        kprintf(" |            Password requested once per boot session             |\n");
+        kprintf(" |  rex      - Privileged command                                   |\n");
+        kprintf(" |            gain full access of your device.                      |\n");
         kprintf(" |__________________________________________________________________|\n");
         kprintf(" |  Use UP/DOWN arrows to navigate history                          |\n");
         kprintf(" |__________________________________________________________________|\n");
@@ -201,7 +201,9 @@ static void shell_execute_command(void) {
             strncat(fullpath, dirname, 255 - strlen(fullpath) - 1);
         }
 
-        if (vfs_is_dir(fullpath)) {
+        if (strcmp(fullpath, ROOT_DIR) == 0) {
+            kprintf("Permission denied: use 'rex goto /' to access root\n");
+        } else if (vfs_is_dir(fullpath)) {
             if (dir_history.sp < DIR_HISTORY_SIZE) {
                 strncpy(dir_history.stack[dir_history.sp], current_dir, DIR_PATH_SIZE - 1);
                 dir_history.stack[dir_history.sp][DIR_PATH_SIZE - 1] = 0;
@@ -209,7 +211,6 @@ static void shell_execute_command(void) {
             }
             strncpy(current_dir, fullpath, 255);
             current_dir[255] = 0;
-           // kprintf("[DEBUG] goto: current_dir now='%s'\n", current_dir);
         } else {
             kprintf("Directory not found: %s\n", fullpath);
         }
@@ -312,6 +313,9 @@ void shell_run(void) {
     input.len = 0;
 
     vga_clear();
+
+    strncpy(current_dir, HOME_DIR, sizeof(current_dir) - 1);
+    current_dir[sizeof(current_dir) - 1] = 0;
 
     kprintf("[@~G ->]  Welcome to GSh \n");
     kprintf("[@~G ->  %s] ", current_dir);
