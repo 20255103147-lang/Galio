@@ -164,7 +164,7 @@ void vfs_listdir(const char *path) {
         return;
     }
 
-    kprintf("[VFS] Directory listing: %s\n", norm_path);
+    kprintf("Directory listing: %s\n", norm_path);
 
     u32 count = 0;
     u32 dir_count = 0;

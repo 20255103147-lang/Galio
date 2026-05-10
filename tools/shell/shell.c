@@ -163,7 +163,7 @@ static void shell_execute_command(void) {
             }
             strncat(fullpath, dirname, 255 - strlen(fullpath) - 1);
         }
-        kprintf("[DEBUG] mkdir: current_dir='%s', dirname='%s', fullpath='%s'\n", current_dir, dirname, fullpath);
+        //kprintf("[DEBUG] mkdir: current_dir='%s', dirname='%s', fullpath='%s'\n", current_dir, dirname, fullpath);
         vfs_mkdir(fullpath);
     } else if (strncmp(input.buffer, "rmdir ", 6) == 0) {
         const char *dirname = input.buffer + 6;
