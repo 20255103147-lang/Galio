@@ -43,12 +43,13 @@ static file_spec_t files[] = {
     {"/dev",           NULL, 0, 1},
     {"/tmp",           NULL, 0, 1},
     {"/home",          NULL, 0, 1},
-    {"/sys",           NULL, 0, 1},
-    {"/proc",          NULL, 0, 1},
-    {"/var",           NULL, 0, 1},
-    {"/var/log",       NULL, 0, 1},
-    {"/var/tmp",       NULL, 0, 1},
-    {"/home/root",     NULL, 0, 1},
+    {"/home/Desktop",  NULL, 0, 1},
+    {"/home/Downloads", NULL, 0, 1},
+    {"/home/Images",   NULL, 0, 1},
+    {"/home/Videos",   NULL, 0, 1},
+    {"/home/Music",    NULL, 0, 1},
+    {"/home/Documents", NULL, 0, 1},
+    {"/home/Pictures", NULL, 0, 1},
     {"/usr",           NULL, 0, 1},
     {"/usr/bin",       NULL, 0, 1},
     {"/usr/lib",       NULL, 0, 1},
@@ -130,25 +131,13 @@ static file_spec_t files[] = {
         98, 0},
 
     /* User home files */
-    {"/home/root/.bashrc",
-        "# Galio Shell Configuration\n"
-        "export PS1=\"galio# \"\n"
-        "alias ls='ls -la'\n"
-        "alias df='disk free'\n",
-        73, 0},
-
-    {"/home/root/readme.txt",
-        "Galio Kernel README\n"
-        "===================\n"
+    {"/home/Desktop/readme.txt",
+        "Desktop Directory\n"
+        "=================\n"
         "\n"
-        "This is the root home directory.\n"
-        "Filesystem features:\n"
-        "  - Linux-like directory structure\n"
-        "  - Full path support with /\n"
-        "  - File reading capabilities\n"
-        "  - Directory listing\n"
-        "  - Memory-based VFS\n",
-        200, 0},
+        "This is your desktop directory.\n"
+        "Place your shortcuts and files here.\n",
+        80, 0},
 
     /* System binaries (placeholder) */
     {"/bin/init",
