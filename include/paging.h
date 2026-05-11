@@ -48,4 +48,10 @@ void paging_enable(page_directory_t *pd);
 /* Get current page directory */
 page_directory_t *paging_get_current(void);
 
+/* Clone a page directory */
+page_directory_t *paging_clone_directory(page_directory_t *src);
+
+/* Load a page directory */
+void paging_load_directory(page_directory_t *pd);
+
 #endif /* PAGING_H */

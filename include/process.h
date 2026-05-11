@@ -7,6 +7,7 @@
 
 #define MAX_PROCESSES 128
 #define PROCESS_STACK_SIZE 8192
+#define PROCESS_MAX_FDS 16
 
 typedef enum {
     PROCESS_READY,
@@ -18,9 +19,14 @@ typedef enum {
 typedef struct {
     u32 esp;
     u32 ebp;
-    u32 eip;
-    u32 eax, ebx, ecx, edx, esi, edi;
+    u32 esi;
+    u32 edi;
+    u32 ebx;
+    u32 edx;
+    u32 ecx;
+    u32 eax;
     u32 eflags;
+    u32 eip;  /* For initial setup */
 } register_state_t;
 
 typedef struct {
@@ -33,6 +39,7 @@ typedef struct {
     void *pagedir;
     u32 priority;
     u32 ticks;
+    u32 fd_table[PROCESS_MAX_FDS];  /* File descriptor table per-process */
 } process_t;
 
 /* Initialize process manager */

@@ -102,3 +102,15 @@ void paging_enable(page_directory_t *pd) {
 page_directory_t *paging_get_current(void) {
     return kernel_pd;
 }
+
+page_directory_t *paging_clone_directory(page_directory_t *src) {
+    /* Simplified clone - just return the same directory for now */
+    /* TODO: Implement proper copy-on-write */
+    (void)src;
+    return paging_create_directory();
+}
+
+void paging_load_directory(page_directory_t *pd) {
+    u32 pd_phys = (u32)pd->directory;
+    __asm__ volatile("mov %0, %%cr3" : : "r"(pd_phys));
+}

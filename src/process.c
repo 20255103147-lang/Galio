@@ -3,6 +3,9 @@
 #include "heap.h"
 #include "paging.h"
 #include "kprintf.h"
+#include "vfs.h"
+
+extern void process_switch_asm(register_state_t *old_regs, register_state_t *new_regs);
 
 static process_t processes[MAX_PROCESSES];
 static u32 next_pid = 1;
@@ -65,14 +68,19 @@ u32 process_create(void (*entry)(void), u32 priority) {
     
     proc->regs.esp = stack_top;
     proc->regs.ebp = stack_top;
-    proc->regs.eip = (u32)entry;
-    proc->regs.eflags = 0x202;  /* IF flag set */
-    proc->regs.eax = 0;
-    proc->regs.ebx = 0;
-    proc->regs.ecx = 0;
-    proc->regs.edx = 0;
     proc->regs.esi = 0;
     proc->regs.edi = 0;
+    proc->regs.ebx = 0;
+    proc->regs.edx = 0;
+    proc->regs.ecx = 0;
+    proc->regs.eax = 0;
+    proc->regs.eflags = 0x202;  /* IF flag set */
+    proc->regs.eip = (u32)entry;
+
+    /* Initialize file descriptor table */
+    for (u32 fd_idx = 0; fd_idx < PROCESS_MAX_FDS; fd_idx++) {
+        proc->fd_table[fd_idx] = VFS_INVALID_FD;
+    }
 
     process_count++;
     kprintf("Process created: PID=%u, priority=%u\n", proc->pid, priority);
@@ -111,10 +119,17 @@ void process_yield(void) {
 }
 
 void process_switch(process_t *from, process_t *to) {
-    (void)from;
-    (void)to;
-    /* Assembly function will handle actual context switch */
-    /* process_switch_asm(&from->regs, &to->regs); */
+    /* Save current EIP on stack for return */
+    from->regs.eip = (u32)&&return_point;
+
+    /* Perform context switch */
+    process_switch_asm(&from->regs, &to->regs);
+
+return_point:
+    /* Restore page directory if different */
+    if (from->pagedir != to->pagedir && to->pagedir) {
+        paging_load_directory(to->pagedir);
+    }
 }
 
 void process_exit(i32 code) {

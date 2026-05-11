@@ -11,9 +11,11 @@
 #include "keyboard.h"
 #include "process.h"
 #include "vfs.h"
-#include "elf.h"
-#include "shell.h"
+#include "ata.h"
+#include "ext2.h"
+#include "init.h"
 #include "cpu.h"
+#include "scheduler.h"
 #include "auth.h"
 
 /* Syscall interface declaration */
@@ -92,6 +94,9 @@ void kmain(void *multiboot_ptr) {
     kprintf("Initializing timer (100 Hz)...\n");
     pit_init(100);
 
+    kprintf("Initializing scheduler...\n");
+    scheduler_init();
+
     /* Do NOT initialize keyboard driver – we will use polling in shell */
     // kprintf("Initializing keyboard...\n");
     // keyboard_init();
@@ -101,6 +106,12 @@ void kmain(void *multiboot_ptr) {
     extern u8 _binary_initrd_bin_start;
     vfs_init(&_binary_initrd_bin_start);
     vfs_debug();
+
+    kprintf("Initializing ATA driver...\n");
+    ata_init();
+
+    kprintf("Initializing EXT2 filesystem...\n");
+    ext2_init();
 
     /* Test filesystem output - reduced for clarity */
     kprintf("\n");
@@ -195,9 +206,20 @@ void kmain(void *multiboot_ptr) {
         for (volatile int i = 0; i < 1000; i++);
     }
 
-    /* Launch interactive shell (polling mode) */
-    shell_run();
+    /* Create init process */
+    kprintf("Creating init process...\n");
+    u32 init_pid = process_create(init_main, 1);
+    if (!init_pid) {
+        kprintf("Failed to create init process!\n");
+        for(;;);
+    }
 
-    /* Should never reach here */
-    for(;;);
+    /* Enable interrupts for multitasking */
+    __asm__ volatile("sti");
+
+    /* Idle loop - scheduler will handle processes */
+    kprintf("Kernel initialization complete. Entering idle loop.\n");
+    for(;;) {
+        __asm__ volatile("hlt");
+    }
 }

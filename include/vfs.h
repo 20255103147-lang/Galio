@@ -44,6 +44,15 @@ vfs_entry_t *vfs_find(const char *path);
 /* Read file by path */
 u32 vfs_read(const char *path, void *buffer, u32 size);
 
+/* Read from an open file descriptor */
+u32 vfs_read_fd(u32 fd, void *buffer, u32 size);
+
+/* Seek within an open file */
+u32 vfs_lseek(u32 fd, i32 offset, i32 whence);
+
+/* Get file stat information */
+u32 vfs_stat(const char *path, void *statbuf);
+
 /* List directory */
 void vfs_listdir(const char *path);
 
@@ -75,9 +84,28 @@ u32 vfs_dir_size(const char *path);
  u32 vfs_create(const char *path, u8 force);
  u32 vfs_unlink(const char *path);
 
-/* File descriptor API */
- u32 vfs_open(const char *path);
- u32 vfs_close(u32 fd);
- u32 vfs_write(u32 fd, const void *buffer, u32 size);
+/* File descriptor structure */
+typedef struct {
+    u32 inode;
+    u32 offset;
+    u32 flags;
+} vfs_fd_t;
+
+/* Mount point structure */
+typedef struct {
+    char mountpoint[256];
+    u32 device;  /* 0 for RAM, 1 for disk */
+    u32 start_block;
+} vfs_mount_t;
+
+/* Global file descriptor table */
+#define MAX_FDS 32
+extern vfs_fd_t fd_table[MAX_FDS];
+
+/* Mount filesystem */
+i32 vfs_mount(const char *mountpoint, u32 device);
+
+/* Unmount filesystem */
+i32 vfs_unmount(const char *mountpoint);
 
 #endif /* VFS_H */

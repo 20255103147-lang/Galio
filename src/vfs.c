@@ -155,7 +155,7 @@ void vfs_listdir(const char *path) {
     u32 total_dir_size = 0;
 
     for (u32 i = 0; i < dentry->inode->dirent_count; i++) {
-        vfs_dirent_t *dent = &dentry->inode->dirents[i];
+        vfs_core_dirent_t *dent = &dentry->inode->dirents[i];
         if (strcmp(dent->name, ".") == 0 || strcmp(dent->name, "..") == 0) continue;
         vfs_inode_t *child = vfs_core_inode_by_number(dent->inode_number);
         if (!child) continue;
@@ -341,4 +341,51 @@ u32 vfs_rmdir(const char *path) {
     }
     kprintf("[VFS] Removed directory: %s\n", norm_path);
     return 1;
+}
+
+/* File descriptor table */
+vfs_fd_t fd_table[MAX_FDS];
+
+/* Mount filesystem */
+i32 vfs_mount(const char *mountpoint, u32 device) {
+    (void)mountpoint; (void)device;
+    kprintf("[VFS] Mount not implemented yet\n");
+    return -1;
+}
+
+/* Unmount filesystem */
+i32 vfs_unmount(const char *mountpoint) {
+    (void)mountpoint;
+    kprintf("[VFS] Unmount not implemented yet\n");
+    return -1;
+}
+
+/* File descriptor operations */
+u32 vfs_open(const char *path) {
+    /* Find free fd */
+    for (u32 fd = 0; fd < MAX_FDS; fd++) {
+        if (fd_table[fd].inode == 0) {
+            /* For now, just use RAM filesystem */
+            vfs_entry_t *entry = vfs_find(path);
+            if (!entry) return VFS_INVALID_FD;
+
+            fd_table[fd].inode = 1;  /* Dummy inode */
+            fd_table[fd].offset = 0;
+            fd_table[fd].flags = 0;
+            return fd;
+        }
+    }
+    return VFS_INVALID_FD;
+}
+
+u32 vfs_close(u32 fd) {
+    if (fd >= MAX_FDS) return 0;
+    fd_table[fd].inode = 0;
+    return 1;
+}
+
+u32 vfs_write(u32 fd, const void *buffer, u32 size) {
+    (void)fd; (void)buffer; (void)size;
+    kprintf("[VFS] Write not implemented\n");
+    return 0;
 }

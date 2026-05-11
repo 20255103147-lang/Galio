@@ -3,6 +3,7 @@
 #include "kprintf.h"
 #include "string.h"
 #include "vfs.h"
+#include "vfs_core.h"
 #include "cpu.h"
 
 #define EDITOR_BUFFER_SIZE 4096
@@ -58,13 +59,10 @@ static void editor_display(editor_buffer_t *buf, const char *filepath, u8 save_s
 }
 
 static u32 vfs_write_file(const char *path, const u8 *data, u32 size) {
-    vfs_entry_t *entry = vfs_find(path);
-    if (!entry || entry->is_dir) return 0;
-
-    u32 fd = vfs_open(path);
+    u32 fd = vfs_core_open(path);
     if (fd == VFS_INVALID_FD) return 0;
-    u32 written = vfs_write(fd, data, size);
-    vfs_close(fd);
+    u32 written = vfs_core_write(fd, data, size);
+    vfs_core_close(fd);
     return written;
 }
 

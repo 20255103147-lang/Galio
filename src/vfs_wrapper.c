@@ -396,3 +396,30 @@ u32 vfs_unlink(const char *path) {
     kprintf("[VFS] Removed file: %s\n", path);
     return 1;
 }
+
+/* Read from an open file descriptor */
+u32 vfs_read_fd(u32 fd, void *buffer, u32 size) {
+    if (!vfs_root) {
+        kprintf("[VFS] ERROR: Filesystem not mounted\n");
+        return 0;
+    }
+    return vfs_core_read(fd, buffer, size);
+}
+
+/* Seek within an open file */
+u32 vfs_lseek(u32 fd, i32 offset, i32 whence) {
+    if (!vfs_root) {
+        kprintf("[VFS] ERROR: Filesystem not mounted\n");
+        return (u32)-1;
+    }
+    return vfs_core_lseek(fd, offset, whence);
+}
+
+/* Get file stat information */
+u32 vfs_stat(const char *path, void *statbuf) {
+    if (!vfs_root) {
+        kprintf("[VFS] ERROR: Filesystem not mounted\n");
+        return 0;
+    }
+    return vfs_core_stat(path, statbuf);
+}

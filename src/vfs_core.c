@@ -651,3 +651,92 @@ u32 vfs_core_rmdir(const char *path) {
     dentry->inode->mode = 0;
     return 1;
 }
+
+/* Read from an open file descriptor */
+u32 vfs_core_read(u32 fd, void *buffer, u32 size) {
+    if (fd >= VFS_MAX_FILE_HANDLES) return 0;
+    if (!buffer) return 0;
+    
+    vfs_file_t *fh = &vfs_files[fd];
+    if (!fh->inode || fh->ref_count == 0 || fh->inode->mode != VFS_TYPE_FILE) {
+        return 0;
+    }
+    
+    u32 to_read = size;
+    if (fh->pos >= fh->inode->size) {
+        return 0;  /* EOF */
+    }
+    
+    if (fh->pos + to_read > fh->inode->size) {
+        to_read = fh->inode->size - fh->pos;
+    }
+    
+    if (to_read == 0) return 0;
+    
+    u32 offset = fh->inode->blocks[0];
+    if (offset == 0xFFFFFFFFu) return 0;
+    
+    memcpy(buffer, vfs_data_ram + offset + fh->pos, to_read);
+    fh->pos += to_read;
+    return to_read;
+}
+
+/* Seek within an open file */
+u32 vfs_core_lseek(u32 fd, i32 offset, i32 whence) {
+    if (fd >= VFS_MAX_FILE_HANDLES) return (u32)-1;
+    
+    vfs_file_t *fh = &vfs_files[fd];
+    if (!fh->inode || fh->ref_count == 0 || fh->inode->mode != VFS_TYPE_FILE) {
+        return (u32)-1;
+    }
+    
+    u32 new_pos;
+    
+    switch (whence) {
+        case 0:  /* SEEK_SET */
+            new_pos = offset;
+            break;
+        case 1:  /* SEEK_CUR */
+            new_pos = fh->pos + offset;
+            break;
+        case 2:  /* SEEK_END */
+            new_pos = fh->inode->size + offset;
+            break;
+        default:
+            return (u32)-1;
+    }
+    
+    fh->pos = new_pos;
+    return new_pos;
+}
+
+/* Get file stat information */
+u32 vfs_core_stat(const char *path, void *statbuf) {
+    if (!path || !statbuf) return 0;
+    
+    vfs_dentry_t *dentry = vfs_core_lookup(path, 0);
+    if (!dentry || !dentry->inode) {
+        return 0;
+    }
+    
+    /* Simple stat structure */
+    typedef struct {
+        u32 mode;      /* File type and permissions */
+        u32 size;      /* File size in bytes */
+        u32 blocks;    /* Number of blocks allocated */
+        u32 atime;     /* Access time */
+        u32 mtime;     /* Modification time */
+        u32 ctime;     /* Creation time */
+    } simple_stat_t;
+    
+    simple_stat_t *stat = (simple_stat_t *)statbuf;
+    stat->mode = dentry->inode->mode;
+    stat->size = dentry->inode->size;
+    stat->blocks = dentry->inode->block_count;
+    stat->atime = dentry->inode->atime;
+    stat->mtime = dentry->inode->mtime;
+    stat->ctime = dentry->inode->ctime;
+    
+    return 1;
+}
+

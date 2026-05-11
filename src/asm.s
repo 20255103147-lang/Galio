@@ -36,3 +36,35 @@ paging_enable_asm:
     mov cr0, eax            ; Enable paging
     ret
 
+; process_switch_asm: arg1 = old_regs, arg2 = new_regs
+GLOBAL process_switch_asm
+process_switch_asm:
+    ; Save current registers to old_regs
+    mov eax, [esp + 4]      ; old_regs
+    mov [eax + 0], esp      ; esp
+    mov [eax + 4], ebp      ; ebp
+    mov [eax + 8], esi      ; esi
+    mov [eax + 12], edi     ; edi
+    mov [eax + 16], ebx     ; ebx
+    mov [eax + 20], edx     ; edx
+    mov [eax + 24], ecx     ; ecx
+    mov [eax + 28], eax     ; eax (will be overwritten, but save current)
+    pushfd
+    pop dword [eax + 32]   ; eflags
+
+    ; Load new registers from new_regs
+    mov eax, [esp + 8]      ; new_regs
+    mov esp, [eax + 0]      ; esp
+    mov ebp, [eax + 4]      ; ebp
+    mov esi, [eax + 8]      ; esi
+    mov edi, [eax + 12]     ; edi
+    mov ebx, [eax + 16]     ; ebx
+    mov edx, [eax + 20]     ; edx
+    mov ecx, [eax + 24]     ; ecx
+    ; Skip eax for now
+    push dword [eax + 32]   ; eflags
+    popfd
+    mov eax, [eax + 28]     ; eax
+
+    ret
+
