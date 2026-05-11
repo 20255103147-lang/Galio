@@ -96,7 +96,7 @@ static void shell_execute_command(void) {
             if (!auth_prompt_password("Password: ", password, INPUT_BUFFER_SIZE) ||
                 !auth_verify_password(kernel_auth.username, password)) {
                 kprintf("\n[REX] Access denied: Invalid password\n");
-                kprintf("[@~G ->  %s] ", current_dir);
+                kprintf(" ~[ G ]   < %s >   ", current_dir);
                 input.len = 0;
                 return;
             }
@@ -299,7 +299,7 @@ static void shell_execute_command(void) {
         kprintf("Unknown command: %s\nType 'help' for available commands\n", input.buffer);
     }
 
-    kprintf("[@~G ->  %s] ", current_dir);
+    kprintf(" ~[ G ]   < %s >   ", current_dir);
     input.len = 0;
 }
 
