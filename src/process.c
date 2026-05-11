@@ -7,6 +7,9 @@
 
 extern void process_switch_asm(register_state_t *old_regs, register_state_t *new_regs);
 
+u32 process_switch_new_eflags = 0;
+u32 process_switch_new_eip = 0;
+
 static process_t processes[MAX_PROCESSES];
 static u32 next_pid = 1;
 static process_t *current_process = NULL;
@@ -14,18 +17,31 @@ static u32 process_count = 0;
 
 extern void process_switch_asm(register_state_t *old_regs, register_state_t *new_regs);
 
+/* Idle process main function */
+void idle_main(void) {
+    kprintf("Idle process running\n");
+    for (;;) {
+        process_yield();
+    }
+}
+
 void process_init(void) {
     kprintf("Process manager initialized\n");
     
-    /* Mark all processes as invalid */
-    for (u32 i = 0; i < MAX_PROCESSES; i++) {
+    /* Reserve boot process slot at index 0 */
+    processes[0].pid = 0xFFFFFFFF;
+    processes[0].state = PROCESS_ZOMBIE;
+    processes[0].pagedir = NULL;
+
+    /* Mark remaining processes as invalid */
+    for (u32 i = 1; i < MAX_PROCESSES; i++) {
         processes[i].pid = 0;
         processes[i].state = PROCESS_ZOMBIE;
     }
 
     /* Create idle process */
-    process_create(NULL, 0);
-    current_process = &processes[0];
+    process_create(idle_main, 0);
+    current_process = &processes[1];
     kprintf("Idle process created (PID 1)\n");
 }
 
@@ -53,6 +69,7 @@ u32 process_create(void (*entry)(void), u32 priority) {
     proc->state = PROCESS_READY;
     proc->priority = priority;
     proc->ticks = 0;
+    proc->pagedir = NULL;
 
     /* Allocate kernel stack */
     proc->stack = (u32 *)kmalloc(PROCESS_STACK_SIZE);
@@ -113,10 +130,18 @@ void process_yield(void) {
         process_t *old = current_process;
         current_process = next;
         next->state = PROCESS_RUNNING;
-        old->state = PROCESS_READY;
+        if (old->pid != 0xFFFFFFFF) {
+            old->state = PROCESS_READY;
+        }
         process_switch(old, next);
     }
 }
+
+void process_set_boot_current(void) {
+    current_process = &processes[0];
+    current_process->state = PROCESS_RUNNING;
+}
+
 
 void process_switch(process_t *from, process_t *to) {
     /* Save current EIP on stack for return */

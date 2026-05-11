@@ -176,7 +176,7 @@ void kmain(void *multiboot_ptr) {
     // }
          
 
-    /* Disable all interrupts – we will use polling */
+    /* Disable all interrupts while polling the keyboard manually */
     __asm__ volatile("cli");
 
     /* Mask all IRQs on both PICs */
@@ -206,6 +206,9 @@ void kmain(void *multiboot_ptr) {
         for (volatile int i = 0; i < 1000; i++);
     }
 
+    /* Restore timer IRQ so the scheduler can run once interrupts are enabled */
+    irq_unmask(0);
+
     /* Create init process */
     kprintf("Creating init process...\n");
     u32 init_pid = process_create(init_main, 1);
@@ -214,12 +217,18 @@ void kmain(void *multiboot_ptr) {
         for(;;);
     }
 
-    /* Enable interrupts for multitasking */
+    process_set_boot_current();
+
+    /* Switch to idle process to start multitasking */
+    kprintf("Kernel initialization complete. Starting multitasking.\n");
+    process_yield();
+
+    /* Enable interrupts after first yield */
     __asm__ volatile("sti");
 
-    /* Idle loop - scheduler will handle processes */
-    kprintf("Kernel initialization complete. Entering idle loop.\n");
-    for(;;) {
+    /* Should never reach here */
+    kprintf("ERROR: Returned from multitasking start!\n");
+    for (;;) {
         __asm__ volatile("hlt");
     }
 }

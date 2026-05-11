@@ -67,12 +67,6 @@ void isr_handler(registers_t *regs) {
 
 /* Main IRQ handler - called from assembly */
 void irq_handler(registers_t *regs) {
-    /* Only print every 100th IRQ to avoid flooding */
-    static u32 irq_counter = 0;
-    if (irq_counter++ % 100 == 0) {
-        kprintf("[IRQ] INT %u (counter=%u)\n", regs->interrupt_number, irq_counter);
-    }
-
     if (regs->interrupt_number >= 40)
         outb(0xA0, 0x20);
     outb(0x20, 0x20);

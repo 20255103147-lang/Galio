@@ -48,7 +48,8 @@ void process_init(void);
 /* Create a new process */
 u32 process_create(void (*entry)(void), u32 priority);
 
-/* Get current process */
+/* Set the current process to the boot context for initial scheduling */
+ void process_set_boot_current(void);
 process_t *process_current(void);
 
 /* Yield to next process */

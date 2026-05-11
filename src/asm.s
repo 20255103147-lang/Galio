@@ -36,35 +36,56 @@ paging_enable_asm:
     mov cr0, eax            ; Enable paging
     ret
 
+extern process_switch_new_eflags
+extern process_switch_new_eip
+
 ; process_switch_asm: arg1 = old_regs, arg2 = new_regs
 GLOBAL process_switch_asm
 process_switch_asm:
-    ; Save current registers to old_regs
-    mov eax, [esp + 4]      ; old_regs
-    mov [eax + 0], esp      ; esp
-    mov [eax + 4], ebp      ; ebp
-    mov [eax + 8], esi      ; esi
-    mov [eax + 12], edi     ; edi
-    mov [eax + 16], ebx     ; ebx
-    mov [eax + 20], edx     ; edx
-    mov [eax + 24], ecx     ; ecx
-    mov [eax + 28], eax     ; eax (will be overwritten, but save current)
+    ; Save register pointers
+    mov edi, [esp + 4]      ; old_regs
+    mov ebx, [esp + 8]      ; new_regs
+
+    ; Save current registers into old_regs
+    pushad
+    mov eax, esp
+    mov ecx, [eax + 12]
+    mov [edi + 0], ecx          ; esp
+    mov ecx, [eax + 8]
+    mov [edi + 4], ecx          ; ebp
+    mov ecx, [eax + 4]
+    mov [edi + 8], ecx          ; esi
+    mov ecx, [eax + 0]
+    mov [edi + 12], ecx         ; edi
+    mov ecx, [eax + 16]
+    mov [edi + 16], ecx         ; ebx
+    mov ecx, [eax + 20]
+    mov [edi + 20], ecx         ; edx
+    mov ecx, [eax + 24]
+    mov [edi + 24], ecx         ; ecx
+    mov ecx, [eax + 28]
+    mov [edi + 28], ecx         ; eax
+    add esp, 32
     pushfd
-    pop dword [eax + 32]   ; eflags
+    pop dword [edi + 32]        ; eflags
 
-    ; Load new registers from new_regs
-    mov eax, [esp + 8]      ; new_regs
-    mov esp, [eax + 0]      ; esp
-    mov ebp, [eax + 4]      ; ebp
-    mov esi, [eax + 8]      ; esi
-    mov edi, [eax + 12]     ; edi
-    mov ebx, [eax + 16]     ; ebx
-    mov edx, [eax + 20]     ; edx
-    mov ecx, [eax + 24]     ; ecx
-    ; Skip eax for now
-    push dword [eax + 32]   ; eflags
+    ; Save new_regs eflags/eip temporarily before overriding ebx
+    mov edx, [ebx + 32]
+    mov [process_switch_new_eflags], edx
+    mov edx, [ebx + 36]
+    mov [process_switch_new_eip], edx
+
+    ; Load registers from new_regs and switch stacks
+    mov edx, ebx                ; new_regs pointer
+    mov ebx, [edx + 16]
+    mov esi, [edx + 8]
+    mov edi, [edx + 12]
+    mov ebp, [edx + 4]
+    mov eax, [edx + 28]
+    mov ecx, [edx + 24]
+    mov esp, [edx + 0]
+    push dword [process_switch_new_eflags]
     popfd
-    mov eax, [eax + 28]     ; eax
-
+    push dword [process_switch_new_eip]
     ret
 
