@@ -1,6 +1,7 @@
 #include "vfs_core.h"
 #include "heap.h"
 #include "kprintf.h"
+#include "pit.h"
 #include "string.h"
 
 static vfs_inode_t vfs_inodes[VFS_MAX_INODES];
@@ -407,6 +408,9 @@ static vfs_dentry_t *vfs_make_directory_internal(const char *path, u8 force) {
     inode->dirent_count = 0;
     inode->dirent_capacity = 0;
     inode->dirents = NULL;
+    inode->atime = pit_get_ticks();
+    inode->mtime = inode->atime;
+    inode->ctime = inode->atime;
     vfs_dirent_add(inode, ".", inode->number);
     vfs_dirent_add(inode, "..", parent->inode->number);
     if (!vfs_dirent_add(parent->inode, name, inode->number)) return NULL;
@@ -437,6 +441,8 @@ static vfs_dentry_t *vfs_make_file_internal(const char *path, u8 force, const u8
         existing->blocks[0] = new_offset;
         existing->block_count = 1;
         existing->size = size;
+        existing->mtime = pit_get_ticks();
+        existing->ctime = existing->mtime;
         return vfs_cache_lookup(parent, name);
     }
     vfs_inode_t *inode = vfs_alloc_inode();
@@ -444,6 +450,9 @@ static vfs_dentry_t *vfs_make_file_internal(const char *path, u8 force, const u8
     inode->mode = VFS_TYPE_FILE;
     inode->size = size;
     inode->link_count = 1;
+    inode->atime = pit_get_ticks();
+    inode->mtime = inode->atime;
+    inode->ctime = inode->atime;
     u32 data_offset = 0;
     if (size > 0) {
         data_offset = vfs_allocate_data(size);

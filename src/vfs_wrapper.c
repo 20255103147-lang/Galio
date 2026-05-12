@@ -2,6 +2,7 @@
 #include "vfs.h"
 #include "vfs_core.h"
 #include "kprintf.h"
+#include "pit.h"
 #include "string.h"
 
 vfs_header_t *vfs_root = NULL;
@@ -393,6 +394,115 @@ u32 vfs_unlink(const char *path) {
     }
     kprintf("[VFS] Removed file: %s\n", path);
     return 1;
+}
+
+static u32 vfs_remove_recursive_dentry(vfs_dentry_t *dentry) {
+    if (!dentry || !dentry->inode) return 0;
+    if (dentry == vfs_core_root()) return 0;
+
+    if (dentry->inode->mode == VFS_TYPE_DIR) {
+        vfs_dentry_t *child = dentry->first_child;
+        while (child) {
+            vfs_dentry_t *next = child->next_sibling;
+            if (strcmp(child->name, ".") != 0 && strcmp(child->name, "..") != 0) {
+                if (!vfs_remove_recursive_dentry(child)) return 0;
+            }
+            child = next;
+        }
+        char fullpath[VFS_MAX_PATH];
+        vfs_core_build_path(dentry, fullpath);
+        return vfs_core_rmdir(fullpath);
+    }
+
+    char fullpath[VFS_MAX_PATH];
+    vfs_core_build_path(dentry, fullpath);
+    return vfs_core_unlink(fullpath);
+}
+
+static u32 vfs_cleanup_old_entries(vfs_dentry_t *dentry, u32 age_ticks, u32 current_ticks) {
+    if (!dentry || !dentry->inode || dentry->inode->mode != VFS_TYPE_DIR) return 0;
+    u32 removed = 0;
+    vfs_dentry_t *child = dentry->first_child;
+    while (child) {
+        vfs_dentry_t *next = child->next_sibling;
+        if (strcmp(child->name, ".") != 0 && strcmp(child->name, "..") != 0) {
+            if (child->inode->mode == VFS_TYPE_DIR) {
+                if (child->inode->ctime != 0 && current_ticks - child->inode->ctime >= age_ticks) {
+                    char fullpath[VFS_MAX_PATH];
+                    vfs_core_build_path(child, fullpath);
+                    if (vfs_remove_recursive_dentry(child)) {
+                        removed++;
+                    }
+                } else {
+                    removed += vfs_cleanup_old_entries(child, age_ticks, current_ticks);
+                }
+            } else {
+                if (child->inode->ctime != 0 && current_ticks - child->inode->ctime >= age_ticks) {
+                    char fullpath[VFS_MAX_PATH];
+                    vfs_core_build_path(child, fullpath);
+                    if (vfs_core_unlink(fullpath)) {
+                        removed++;
+                    }
+                }
+            }
+        }
+        child = next;
+    }
+    return removed;
+}
+
+u32 vfs_remove_recursive(const char *path) {
+    if (!vfs_root) {
+        kprintf("[VFS] ERROR: Filesystem not mounted\n");
+        return 0;
+    }
+    vfs_dentry_t *dentry = vfs_core_lookup(path, 0);
+    if (!dentry || !dentry->inode) return 0;
+    if (dentry == vfs_core_root()) return 0;
+    if (!vfs_remove_recursive_dentry(dentry)) {
+        kprintf("[VFS] ERROR: Could not remove recursively: %s\n", path);
+        return 0;
+    }
+    return 1;
+}
+
+u32 vfs_remove_dir_contents(const char *path) {
+    if (!vfs_root) {
+        kprintf("[VFS] ERROR: Filesystem not mounted\n");
+        return 0;
+    }
+    vfs_dentry_t *dentry = vfs_core_lookup(path, 0);
+    if (!dentry || !dentry->inode || dentry->inode->mode != VFS_TYPE_DIR) {
+        kprintf("[VFS] ERROR: Directory not found: %s\n", path);
+        return 0;
+    }
+    u32 removed = 0;
+    vfs_dentry_t *child = dentry->first_child;
+    while (child) {
+        vfs_dentry_t *next = child->next_sibling;
+        if (strcmp(child->name, ".") != 0 && strcmp(child->name, "..") != 0) {
+            char fullpath[VFS_MAX_PATH];
+            vfs_core_build_path(child, fullpath);
+            if (vfs_remove_recursive_dentry(child)) {
+                removed++;
+            } else {
+                kprintf("[VFS] ERROR: Could not remove entry: %s\n", fullpath);
+            }
+        }
+        child = next;
+    }
+    return removed > 0 ? 1 : 0;
+}
+
+u32 vfs_cleanup_old_recycle_bin(const char *path, u32 age_ticks) {
+    if (!vfs_root) {
+        kprintf("[VFS] ERROR: Filesystem not mounted\n");
+        return 0;
+    }
+    vfs_dentry_t *dentry = vfs_core_lookup(path, 0);
+    if (!dentry || !dentry->inode || dentry->inode->mode != VFS_TYPE_DIR) return 0;
+    u32 current_ticks = pit_get_ticks();
+    return vfs_cleanup_old_entries(dentry, age_ticks, current_ticks);
 }
 
 /* Read from an open file descriptor */

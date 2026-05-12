@@ -14,6 +14,7 @@ SRCS = src/kernel.c src/kmain.c src/vga.c src/gdt.c src/idt.c src/irq.c src/isr.
        tools/shell/shell.c \
        tools/shell/commands/file.c tools/shell/commands/new.c \
        tools/shell/commands/show.c tools/shell/commands/write.c \
+       tools/shell/commands/recycle.c tools/shell/commands/clean.c tools/shell/commands/delete.c \
        tools/shell/editor/editor.c
 OBJS = $(SRCS:.c=.o) src/asm.o src/isr_asm.o boot/boot.o src/embedded_test.o src/embedded_initrd.o
 TEST_ELF = test_elf.bin

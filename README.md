@@ -35,6 +35,8 @@
 - Virtual File System (VFS) layer with initrd support
 - Kernel printf with VGA and serial output
 - Interactive shell with polling-based keyboard input
+- Recycle bin support with `recycle`, `clean rbin`, and `delete` shell commands
+- Recycle bin auto-cleanup for files older than 30 days when shell starts
 
 **ELF Loading**
 - ELF binary loader with proper 32-bit struct definitions

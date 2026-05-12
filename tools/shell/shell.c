@@ -12,6 +12,9 @@
 #include "commands/file.h"
 #include "commands/write.h"
 #include "commands/show.h"
+#include "commands/recycle.h"
+#include "commands/clean.h"
+#include "commands/delete.h"
 #include "editor/editor.h"
 #define SHELL_BUFFER_SIZE 256
 #define HISTORY_SIZE 10
@@ -233,6 +236,24 @@ static void shell_execute_command(void) {
             const char *dir_args = cmd + 9;
             if (*dir_args == ' ') dir_args++;
             shell_dir_command(dir_args, current_dir, 1);
+        } else if (strncmp(cmd, "recycle ", 8) == 0) {
+            const char *recycle_args = cmd + 8;
+            if (*recycle_args == ' ') recycle_args++;
+            shell_recycle_command(recycle_args, current_dir, 1);
+        } else if (strcmp(cmd, "recycle") == 0) {
+            shell_recycle_command("", current_dir, 1);
+        } else if (strncmp(cmd, "delete ", 7) == 0) {
+            const char *delete_args = cmd + 7;
+            if (*delete_args == ' ') delete_args++;
+            shell_delete_command(delete_args, current_dir, 1);
+        } else if (strcmp(cmd, "delete") == 0) {
+            shell_delete_command("", current_dir, 1);
+        } else if (strncmp(cmd, "clean ", 6) == 0) {
+            const char *clean_args = cmd + 6;
+            if (*clean_args == ' ') clean_args++;
+            shell_clean_command(clean_args, current_dir);
+        } else if (strcmp(cmd, "clean") == 0) {
+            shell_clean_command("", current_dir);
         } else {
             kprintf("[REX] Unknown privileged command: %s\n", cmd);
         }
@@ -253,6 +274,18 @@ static void shell_execute_command(void) {
     } else if (strcmp(input.buffer, "show") == 0) {
         kprintf("[SHOW] Usage: show <filepath>\n");
         kprintf("[SHOW] Example: show /home/Desktop/file.txt\n");
+    } else if (strncmp(input.buffer, "recycle ", 8) == 0) {
+        shell_recycle_command(input.buffer + 8, current_dir, 0);
+    } else if (strcmp(input.buffer, "recycle") == 0) {
+        shell_recycle_command("", current_dir, 0);
+    } else if (strncmp(input.buffer, "delete ", 7) == 0) {
+        shell_delete_command(input.buffer + 7, current_dir, 0);
+    } else if (strcmp(input.buffer, "delete") == 0) {
+        shell_delete_command("", current_dir, 0);
+    } else if (strncmp(input.buffer, "clean ", 6) == 0) {
+        shell_clean_command(input.buffer + 6, current_dir);
+    } else if (strcmp(input.buffer, "clean") == 0) {
+        shell_clean_command("", current_dir);
     } else if (strncmp(input.buffer, "clear", 5) == 0) {
         vga_clear();
         kprintf("                                GSH                                  \n");
@@ -283,6 +316,13 @@ static void shell_execute_command(void) {
         kprintf(" |  write    - Write/edit file (usage: write <name> [path])         |\n");
         kprintf(" |__________________________________________________________________|\n");
         kprintf(" |  show     - Display file contents (usage: show <filepath>)       |\n");
+        kprintf(" |__________________________________________________________________|\n");
+        kprintf(" | recycle  - Move file to recycle bin (usage: recycle <path1> [path2] ...)       |\n");
+        kprintf(" |__________________________________________________________________|\n");
+        kprintf(" | clean    - Clean recycle bin (usage: clean rbin)                 |\n");
+        kprintf(" |__________________________________________________________________|\n");
+        kprintf(" | delete   - Permanently delete file/folder (usage: delete <path1> [path2] ...)  |\n");
+        kprintf(" |             Use 'rex delete <path>' for root-level removals.     |\n");
         kprintf(" |__________________________________________________________________|\n");
         kprintf(" | clear    - Clear the screen                                      |\n");
         kprintf(" |__________________________________________________________________|\n");
@@ -504,6 +544,8 @@ void shell_run(void) {
 
     strncpy(current_dir, HOME_DIR, sizeof(current_dir) - 1);
     current_dir[sizeof(current_dir) - 1] = 0;
+
+    vfs_cleanup_old_recycle_bin("/home/Desktop/recycle", 259200000);
 
     kprintf("                                 Welcome to GSh                        ");
     kprintf("                                                                       ");

@@ -22,10 +22,6 @@ static void *syscall_mmap(void *addr, u32 length, i32 prot, i32 flags, i32 fd, u
 static i32 syscall_munmap(void *addr, u32 length);
 static void *syscall_brk(void *addr);
 
-/* Forward declarations for VFS functions */
-static u32 vfs_open(const char *path);
-static u32 vfs_close(u32 fd);
-
 /* Syscall handler - called from INT 0x80 */
 static void syscall_handler(registers_t *regs) {
     /* For INT 0x80, we need to distinguish syscall number from interrupt_number */

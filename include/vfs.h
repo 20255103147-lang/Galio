@@ -83,6 +83,12 @@ u32 vfs_dir_size(const char *path);
 /* File creation and removal */
  u32 vfs_create(const char *path, u8 force);
  u32 vfs_unlink(const char *path);
+ u32 vfs_open(const char *path);
+ u32 vfs_close(u32 fd);
+ u32 vfs_write(u32 fd, const void *buffer, u32 size);
+ u32 vfs_remove_recursive(const char *path);
+ u32 vfs_remove_dir_contents(const char *path);
+ u32 vfs_cleanup_old_recycle_bin(const char *path, u32 age_ticks);
 
 /* File descriptor structure */
 typedef struct {
