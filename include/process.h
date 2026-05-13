@@ -8,7 +8,12 @@
 #define MAX_PROCESSES 128
 #define PROCESS_STACK_SIZE 8192
 #define PROCESS_MAX_FDS 16
+#define PROCESS_MAX_MMAPS 16
 
+#define USER_HEAP_START 0x40000000
+#define USER_HEAP_END   0x50000000
+#define USER_STACK_TOP  0xBFFFE000
+#define USER_STACK_SIZE 0x10000
 typedef enum {
     PROCESS_READY,
     PROCESS_RUNNING,
@@ -30,6 +35,16 @@ typedef struct {
 } register_state_t;
 
 typedef struct {
+    u32 start;
+    u32 length;
+    u32 prot;
+    u32 flags;
+    u32 fd;
+    u32 offset;
+    u8 anonymous;
+} mmap_region_t;
+
+typedef struct {
     u32 pid;
     u32 parent_pid;
     process_state_t state;
@@ -40,6 +55,10 @@ typedef struct {
     u32 priority;
     u32 ticks;
     u32 fd_table[PROCESS_MAX_FDS];  /* File descriptor table per-process */
+    u32 heap_start;
+    u32 brk;
+    u32 mmap_count;
+    mmap_region_t mmap_regions[PROCESS_MAX_MMAPS];
 } process_t;
 
 /* Initialize process manager */
@@ -63,5 +82,8 @@ void process_exit(i32 code);
 
 /* Get process by PID */
 process_t *process_get(u32 pid);
+
+/* Kill a process when memory pressure is too high */
+void process_oom_kill(void);
 
 #endif /* PROCESS_H */

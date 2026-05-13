@@ -2,20 +2,73 @@
 #include "paging.h"
 #include "pmem.h"
 #include "kprintf.h"
+#include "cpu.h"
+#include "process.h"
 
 #define PAGE_SIZE 4096
-#define TABLE_SIZE 1024
+#define PAGE_ENTRIES 1024
+#define MAX_PAGE_DIRS 64
 
-static page_directory_t kernel_pd_storage;
+static page_directory_t page_directory_pool[MAX_PAGE_DIRS];
+static u32 page_directory_count = 0;
 static page_directory_t *kernel_pd = NULL;
 
-/* Helper: allocate and clear a page table */
+static page_directory_t *alloc_page_directory(void) {
+    if (page_directory_count >= MAX_PAGE_DIRS) return NULL;
+    page_directory_t *pd = &page_directory_pool[page_directory_count++];
+    pd->directory = NULL;
+    for (u32 i = 0; i < PAGE_ENTRIES; i++) pd->tables[i] = NULL;
+    return pd;
+}
+
 static u32 alloc_page_table(void) {
     u32 pt_phys = pmem_alloc(1);
     if (!pt_phys) return 0;
     volatile u32 *pt_virt = (volatile u32 *)pt_phys;
-    for (int i = 0; i < 1024; i++) pt_virt[i] = 0;
+    for (u32 i = 0; i < PAGE_ENTRIES; i++) pt_virt[i] = 0;
     return pt_phys;
+}
+
+static u32 *get_page_table(page_directory_t *pd, u32 vaddr) {
+    u32 pd_idx = (vaddr >> 22) & 0x3FF;
+    return pd->tables[pd_idx];
+}
+
+static u32 *get_page_entry(page_directory_t *pd, u32 vaddr) {
+    u32 pd_idx = (vaddr >> 22) & 0x3FF;
+    u32 pt_idx = (vaddr >> 12) & 0x3FF;
+    if (!pd->tables[pd_idx]) return NULL;
+    return &pd->tables[pd_idx][pt_idx];
+}
+
+static void handle_cow_fault(page_directory_t *pd, u32 fault_addr) {
+    u32 page_base = fault_addr & 0xFFFFF000;
+    u32 *pte = get_page_entry(pd, page_base);
+    if (!pte) return;
+
+    u32 pte_val = *pte;
+    if (!(pte_val & PAGE_PRESENT) || !(pte_val & PAGE_USER)) return;
+
+    u32 phys = pte_val & 0xFFFFF000;
+    if (pmem_get_refcount(phys) <= 1) {
+        *pte |= PAGE_RW;
+        __asm__ volatile("invlpg (%0)" : : "r"(page_base) : "memory");
+        return;
+    }
+
+    u32 new_phys = pmem_alloc(1);
+    if (!new_phys) {
+        kprintf("COW fault: Unable to allocate new page for 0x%08X\n", page_base);
+        return;
+    }
+
+    u8 *src = (u8 *)phys;
+    u8 *dst = (u8 *)new_phys;
+    for (u32 i = 0; i < PAGE_SIZE; i++) dst[i] = src[i];
+
+    pmem_refcount_dec(phys);
+    *pte = (new_phys & 0xFFFFF000) | PAGE_PRESENT | PAGE_RW | PAGE_USER;
+    __asm__ volatile("invlpg (%0)" : : "r"(page_base) : "memory");
 }
 
 void paging_init(void) {
@@ -44,13 +97,34 @@ void paging_init(void) {
 }
 
 page_directory_t *paging_create_directory(void) {
+    page_directory_t *pd = alloc_page_directory();
+    if (!pd) return NULL;
+
     u32 pd_phys = pmem_alloc(1);
     if (!pd_phys) return NULL;
+
     volatile u32 *pd_virt = (volatile u32 *)pd_phys;
-    for (int i = 0; i < 1024; i++) pd_virt[i] = 0;
-    kernel_pd_storage.directory = (u32 *)pd_phys;
-    for (int i = 0; i < 1024; i++) kernel_pd_storage.tables[i] = NULL;
-    return &kernel_pd_storage;
+    for (u32 i = 0; i < PAGE_ENTRIES; i++) pd_virt[i] = 0;
+
+    pd->directory = (u32 *)pd_phys;
+    for (u32 i = 0; i < PAGE_ENTRIES; i++) pd->tables[i] = NULL;
+    return pd;
+}
+
+page_directory_t *paging_create_user_directory(void) {
+    page_directory_t *pd = paging_create_directory();
+    if (!pd) return NULL;
+
+    if (!kernel_pd) return pd;
+
+    for (u32 i = 0; i < PAGE_ENTRIES; i++) {
+        if (kernel_pd->directory[i] & PAGE_PRESENT) {
+            pd->directory[i] = kernel_pd->directory[i] & ~PAGE_USER;
+            pd->tables[i] = kernel_pd->tables[i];
+        }
+    }
+
+    return pd;
 }
 
 void paging_map(page_directory_t *pd, u32 vaddr, u32 paddr, u32 flags) {
@@ -100,14 +174,46 @@ void paging_enable(page_directory_t *pd) {
 }
 
 page_directory_t *paging_get_current(void) {
+    process_t *proc = process_current();
+    if (proc && proc->pagedir) return proc->pagedir;
     return kernel_pd;
 }
 
 page_directory_t *paging_clone_directory(page_directory_t *src) {
-    /* Simplified clone - just return the same directory for now */
-    /* TODO: Implement proper copy-on-write */
-    (void)src;
-    return paging_create_directory();
+    if (!src) return NULL;
+    page_directory_t *clone = paging_create_user_directory();
+    if (!clone) return NULL;
+
+    for (u32 pd_idx = 0; pd_idx < PAGE_ENTRIES; pd_idx++) {
+        if (!src->tables[pd_idx]) continue;
+        u32 pde = src->directory[pd_idx];
+        if (!(pde & PAGE_PRESENT) || !(pde & PAGE_USER)) continue;
+
+        u32 new_pt_phys = alloc_page_table();
+        if (!new_pt_phys) return clone;
+
+        u32 *old_pt = src->tables[pd_idx];
+        u32 *new_pt = (u32 *)new_pt_phys;
+
+        for (u32 pt_idx = 0; pt_idx < PAGE_ENTRIES; pt_idx++) {
+            u32 pte = old_pt[pt_idx];
+            if (pte & PAGE_PRESENT) {
+                if (pte & PAGE_USER) {
+                    if (pte & PAGE_RW) {
+                        pte &= ~PAGE_RW;
+                        old_pt[pt_idx] &= ~PAGE_RW;
+                    }
+                    pmem_refcount_inc(pte & 0xFFFFF000);
+                }
+                new_pt[pt_idx] = pte;
+            }
+        }
+
+        clone->tables[pd_idx] = (u32 *)new_pt_phys;
+        clone->directory[pd_idx] = (new_pt_phys & 0xFFFFF000) | PAGE_PRESENT | PAGE_RW | PAGE_USER;
+    }
+
+    return clone;
 }
 
 void paging_load_directory(page_directory_t *pd) {

@@ -28,6 +28,11 @@ u32 pmem_alloc(size_t num_frames);
 /* Free physical frames */
 void pmem_free(u32 addr, size_t num_frames);
 
+/* Reference counting helpers for shared pages */
+void pmem_refcount_inc(u32 addr);
+void pmem_refcount_dec(u32 addr);
+u32 pmem_get_refcount(u32 addr);
+
 /* Get available physical memory */
 u32 pmem_get_total(void);
 u32 pmem_get_used(void);

@@ -4,6 +4,7 @@
 #include "paging.h"
 #include "kprintf.h"
 #include "vfs.h"
+#include "pmem.h"
 
 extern void process_switch_asm(register_state_t *old_regs, register_state_t *new_regs);
 
@@ -14,8 +15,6 @@ static process_t processes[MAX_PROCESSES];
 static u32 next_pid = 1;
 static process_t *current_process = NULL;
 static u32 process_count = 0;
-
-extern void process_switch_asm(register_state_t *old_regs, register_state_t *new_regs);
 
 /* Idle process main function */
 void idle_main(void) {
@@ -69,7 +68,17 @@ u32 process_create(void (*entry)(void), u32 priority) {
     proc->state = PROCESS_READY;
     proc->priority = priority;
     proc->ticks = 0;
-    proc->pagedir = NULL;
+    proc->pagedir = paging_create_user_directory();
+    proc->heap_start = USER_HEAP_START;
+    proc->brk = USER_HEAP_START;
+    proc->mmap_count = 0;
+
+    /* Initialize mmap regions */
+    for (u32 i = 0; i < PROCESS_MAX_MMAPS; i++) {
+        proc->mmap_regions[i].start = 0;
+        proc->mmap_regions[i].length = 0;
+        proc->mmap_regions[i].anonymous = 0;
+    }
 
     /* Allocate kernel stack */
     proc->stack = (u32 *)kmalloc(PROCESS_STACK_SIZE);
@@ -103,6 +112,71 @@ u32 process_create(void (*entry)(void), u32 priority) {
     kprintf("Process created: PID=%u, priority=%u\n", proc->pid, priority);
 
     return proc->pid;
+}
+
+static void process_free_address_space(process_t *proc) {
+    if (!proc || !proc->pagedir) return;
+    page_directory_t *pd = proc->pagedir;
+    
+    /* Walk page directory and free all user pages */
+    for (u32 pd_idx = 0; pd_idx < 1024; pd_idx++) {
+        if (!pd->tables[pd_idx]) continue;
+        u32 pde = pd->directory[pd_idx];
+        if (!(pde & PAGE_PRESENT)) continue;
+        
+        u32 *pt = pd->tables[pd_idx];
+        for (u32 pt_idx = 0; pt_idx < 1024; pt_idx++) {
+            u32 pte = pt[pt_idx];
+            if (!(pte & PAGE_PRESENT)) continue;
+            
+            /* Decrement refcount for physical frame */
+            u32 phys_addr = pte & 0xFFFFF000;
+            if (phys_addr) {
+                pmem_refcount_dec(phys_addr);
+            }
+        }
+        /* Free the page table frame */
+        u32 pt_phys = (u32)pt;
+        if (pt_phys) {
+            pmem_free(pt_phys, 1);
+        }
+    }
+    /* Free page directory */
+    u32 pd_phys = (u32)pd->directory;
+    if (pd_phys) {
+        pmem_free(pd_phys, 1);
+    }
+    proc->pagedir = NULL;
+}
+
+static void process_cleanup(process_t *proc) {
+    if (!proc || proc->pid == 0) return;
+    process_free_address_space(proc);
+    if (proc->stack) {
+        kfree(proc->stack);
+        proc->stack = NULL;
+    }
+    proc->pid = 0;
+    proc->state = PROCESS_ZOMBIE;
+    proc->mmap_count = 0;
+    proc->heap_start = USER_HEAP_START;
+    proc->brk = USER_HEAP_START;
+    process_count--;
+}
+
+void process_oom_kill(void) {
+    process_t *victim = NULL;
+    for (u32 i = 0; i < MAX_PROCESSES; i++) {
+        process_t *candidate = &processes[i];
+        if (candidate == current_process) continue;
+        if (candidate->pid != 0 && candidate->state != PROCESS_ZOMBIE) {
+            victim = candidate;
+            break;
+        }
+    }
+    if (!victim) return;
+    kprintf("OOM: Killing process PID=%u to recover memory\n", victim->pid);
+    process_cleanup(victim);
 }
 
 process_t *process_current(void) {
@@ -141,7 +215,6 @@ void process_set_boot_current(void) {
     current_process = &processes[0];
     current_process->state = PROCESS_RUNNING;
 }
-
 
 void process_switch(process_t *from, process_t *to) {
     /* Save current EIP on stack for return */

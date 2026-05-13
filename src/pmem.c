@@ -7,12 +7,15 @@
 #define BITMAP_SIZE (128 * 1024 * 1024 / FRAME_SIZE / 8)  /* For 128MB */
 
 static u8 frame_bitmap[BITMAP_SIZE] = {0};
+static u8 frame_refcount[BITMAP_SIZE * 8] = {0};
 static u32 total_frames = 0;
 static u32 used_frames = 0;
 static u32 kernel_frames = 0;
 
 #define FRAME_MASK(frame) ((frame) / 8)
 #define BIT_MASK(frame)   (1 << ((frame) % 8))
+
+extern void process_oom_kill(void);
 
 static void set_frame(u32 frame) {
     frame_bitmap[FRAME_MASK(frame)] |= BIT_MASK(frame);
@@ -24,6 +27,23 @@ static void unset_frame(u32 frame) {
 
 static u8 get_frame(u32 frame) {
     return frame_bitmap[FRAME_MASK(frame)] & BIT_MASK(frame);
+}
+
+static void ref_frame(u32 frame) {
+    if (frame_refcount[frame] == 0) {
+        set_frame(frame);
+        used_frames++;
+    }
+    frame_refcount[frame]++;
+}
+
+static void deref_frame(u32 frame) {
+    if (frame_refcount[frame] == 0) return;
+    frame_refcount[frame]--;
+    if (frame_refcount[frame] == 0) {
+        unset_frame(frame);
+        used_frames--;
+    }
 }
 
 void pmem_init(u32 mmap_addr, u32 mmap_length) {
@@ -94,9 +114,8 @@ void pmem_init(u32 mmap_addr, u32 mmap_length) {
             kernel_start_frame, kernel_end_frame, kernel_end);
 
     for (u32 frame = kernel_start_frame; frame < kernel_end_frame; frame++) {
-        if (!get_frame(frame)) {
-            set_frame(frame);
-            used_frames++;
+        if (frame_refcount[frame] == 0) {
+            ref_frame(frame);
             kernel_frames++;
         }
     }
@@ -108,9 +127,8 @@ void pmem_init(u32 mmap_addr, u32 mmap_length) {
 
     /* Mark frame 0 and low memory regions (0-0x100000) as used to avoid conflicts */
     for (u32 frame = 0; frame < 0x100000 / FRAME_SIZE; frame++) {
-        if (!get_frame(frame)) {
-            set_frame(frame);
-            used_frames++;
+        if (frame_refcount[frame] == 0) {
+            ref_frame(frame);
         }
     }
 }
@@ -120,7 +138,11 @@ u32 pmem_alloc(size_t num_frames) {
         kprintf("pmem_alloc: Cannot allocate 0 frames\n");
         return 0;
     }
-    
+
+    if ((total_frames - used_frames) < num_frames) {
+        process_oom_kill();
+    }
+
     for (u32 frame = 0; frame < BITMAP_SIZE * 8; frame++) {
         if (!get_frame(frame)) {
             /* Check if we have enough contiguous frames */
@@ -131,20 +153,19 @@ u32 pmem_alloc(size_t num_frames) {
                     break;
                 }
             }
-            
+
             if (found) {
-                for (u32 i = 0; i < num_frames; i++) {
-                    set_frame(frame + i);
-                }
-                used_frames += num_frames;
                 u32 addr = frame * FRAME_SIZE;
+                for (u32 i = 0; i < num_frames; i++) {
+                    ref_frame(frame + i);
+                }
                 kprintf("pmem_alloc: Allocated %u frame(s) at addr=%x (frame %u)\n", num_frames, addr, frame);
                 return addr;
             }
         }
     }
-    
-    kprintf("pmem_alloc: Out of physical memory (requested %u frames, have %u free)\n", 
+
+    kprintf("pmem_alloc: Out of physical memory (requested %u frames, have %u free)\n",
             num_frames, total_frames - used_frames);
     return 0;
 }
@@ -152,19 +173,37 @@ u32 pmem_alloc(size_t num_frames) {
 void pmem_free(u32 addr, size_t num_frames) {
     u32 frame = addr / FRAME_SIZE;
     for (u32 i = 0; i < num_frames; i++) {
-        if (get_frame(frame + i)) {
-            unset_frame(frame + i);
-            used_frames--;
-        }
+        deref_frame(frame + i);
     }
 }
 
 void pmem_claim(u32 addr, size_t num_frames) {
     u32 frame = addr / FRAME_SIZE;
     for (u32 i = 0; i < num_frames; i++) {
-        set_frame(frame + i);
+        ref_frame(frame + i);
     }
-    used_frames += num_frames;
+}
+
+void pmem_refcount_inc(u32 addr) {
+    u32 frame = addr / FRAME_SIZE;
+    if (frame < BITMAP_SIZE * 8) {
+        ref_frame(frame);
+    }
+}
+
+void pmem_refcount_dec(u32 addr) {
+    u32 frame = addr / FRAME_SIZE;
+    if (frame < BITMAP_SIZE * 8) {
+        deref_frame(frame);
+    }
+}
+
+u32 pmem_get_refcount(u32 addr) {
+    u32 frame = addr / FRAME_SIZE;
+    if (frame < BITMAP_SIZE * 8) {
+        return frame_refcount[frame];
+    }
+    return 0;
 }
 
 u32 pmem_get_total(void) {

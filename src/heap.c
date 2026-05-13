@@ -1,12 +1,18 @@
 /* heap.c - Simple kernel heap allocator (uses paging and pmem) */
+/* heap.c - Simple kernel heap allocator (uses paging and pmem) */
 #include "heap.h"
 #include "pmem.h"
 #include "paging.h"
 #include "kprintf.h"
 
+#ifndef PAGE_SIZE
+#define PAGE_SIZE 4096
+#endif
+
 #define HEAP_START      0x500000
 #define HEAP_MAX_SIZE   0x1000000   /* 16 MB */
 #define MIN_BLOCK_SIZE  32
+
 
 typedef struct block {
     size_t size;
@@ -110,4 +116,55 @@ void *krealloc(void *ptr, size_t new_size) {
     __builtin_memcpy(new_ptr, ptr, block->size);
     kfree(ptr);
     return new_ptr;
+}
+
+void *vmalloc(size_t size) {
+    return kmalloc(size);
+}
+
+void vfree(void *ptr) {
+    kfree(ptr);
+}
+
+void *dma_alloc(size_t size) {
+    if (size == 0) return NULL;
+    size = (size + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
+    u32 frames = size / PAGE_SIZE;
+    u32 phys = pmem_alloc(frames);
+    return phys ? (void *)phys : NULL;
+}
+
+void dma_free(void *ptr, size_t size) {
+    if (!ptr || size == 0) return;
+    size = (size + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
+    pmem_free((u32)ptr, size / PAGE_SIZE);
+}
+
+void slab_cache_init(slab_cache_t *cache, size_t object_size, u32 object_count) {
+    if (!cache || object_size == 0 || object_count == 0) return;
+    cache->object_size = (object_size + 7) & ~7;
+    cache->object_count = object_count;
+    cache->memory = kmalloc(cache->object_size * object_count);
+    cache->free_list = NULL;
+    if (!cache->memory) return;
+
+    u8 *ptr = (u8 *)cache->memory;
+    for (u32 i = 0; i < object_count; i++) {
+        *(void **)ptr = cache->free_list;
+        cache->free_list = ptr;
+        ptr += cache->object_size;
+    }
+}
+
+void *slab_alloc(slab_cache_t *cache) {
+    if (!cache || !cache->free_list) return NULL;
+    void *obj = cache->free_list;
+    cache->free_list = *(void **)cache->free_list;
+    return obj;
+}
+
+void slab_free(slab_cache_t *cache, void *ptr) {
+    if (!cache || !ptr) return;
+    *(void **)ptr = cache->free_list;
+    cache->free_list = ptr;
 }

@@ -10,6 +10,7 @@
 #define PAGE_DIRTY        0x040
 
 #include "common.h"
+#include "cpu.h"
 
 /* Paging structures and operations */
 
@@ -32,6 +33,9 @@ void paging_init(void);
 
 /* Create a new page directory */
 page_directory_t *paging_create_directory(void);
+
+/* Create a new page directory with kernel mappings for user space */
+page_directory_t *paging_create_user_directory(void);
 
 /* Map a virtual address to a physical address */
 void paging_map(page_directory_t *pd, u32 vaddr, u32 paddr, u32 flags);
