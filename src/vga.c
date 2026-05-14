@@ -12,6 +12,9 @@ static volatile u16 *vga_buf = (u16*)0xB8000;
 static u32 cursor_x = 0;
 static u32 cursor_y = 0;
 
+/* Current foreground+background attribute byte (default: white on black) */
+static u8 vga_current_color = VGA_COLOR_WHITE;
+
 #define SCROLLBACK_LINES 512
 static char scrollback[SCROLLBACK_LINES][VGA_WIDTH + 1];
 static u32 scrollback_head = 0;
@@ -97,7 +100,7 @@ static void scroll(void) {
         }
     }
     
-    /* Clear last line */
+    /* Clear last line (always white — it is blank infrastructure) */
     for (u32 x = 0; x < VGA_WIDTH; x++) {
         vga_buf[(VGA_HEIGHT-1) * VGA_WIDTH + x] = (u16)(' ' | (VGA_COLOR_WHITE << 8));
     }
@@ -118,7 +121,19 @@ void vga_clear(void) {
     current_line[0] = '\0';
     scrollback_mode = 0;
     scrollback_offset = 0;
+    vga_current_color = VGA_COLOR_WHITE;   /* reset color on clear */
     vga_update_cursor();
+}
+
+/* Set the current character color.
+ * color is a standard VGA attribute byte:
+ *   high nibble = background, low nibble = foreground
+ *   e.g. 0x0A = light green on black
+ *        0x0C = light red on black
+ *        0x0E = yellow on black
+ *        0x0F = white on black  */
+void vga_set_color(unsigned char color) {
+    vga_current_color = color;
 }
 
 void vga_move_cursor(int dx, int dy) {
@@ -141,9 +156,10 @@ void vga_move_cursor(int dx, int dy) {
     vga_update_cursor();
 }
 
+/* Uses vga_current_color instead of the hardcoded white */
 static void vga_putch_at(char c, u32 x, u32 y) {
     if (x < VGA_WIDTH && y < VGA_HEIGHT) {
-        vga_buf[y * VGA_WIDTH + x] = (u16)(c | (VGA_COLOR_WHITE << 8));
+        vga_buf[y * VGA_WIDTH + x] = (u16)(c | (vga_current_color << 8));
     }
 }
 
